@@ -43,6 +43,7 @@ function pickSpawn(){
     initNoise();
     try{updateBounds(dim());}catch{}
     const targets=[2,4,5,9,13,14,15,6];
+    const targetsSet=new Set(targets);
     const want=targets[(perm[3]+perm[91])%targets.length];
     let anyTarget=null,anyLand=null;
     for(let r=0;r<=480;r+=24){
@@ -54,7 +55,7 @@ function pickSpawn(){
         if(sy<SEA+2||sy>250)continue;
         const b=biome(wx,wz,sy);
         if(!anyLand&&b!==0&&b!==12)anyLand={x:wx,y:sy+2,z:wz};
-        if(!anyTarget&&targets.indexOf(b)>=0)anyTarget={x:wx,y:sy+2,z:wz};
+        if(!anyTarget&&targetsSet.has(b))anyTarget={x:wx,y:sy+2,z:wz};
         if(b===want){SPAWN.x=wx;SPAWN.y=sy+2;SPAWN.z=wz;_spawnPicked=true;return;}
       }
     }
@@ -97,16 +98,20 @@ function initNoise(){
 }
 const fade=t=>t*t*t*(t*(t*6-15)+10);
 const lerp=(a,b,t)=>a+t*(b-a);
-const g2=(h,x,z)=>{switch(h&7){case 0:return x+z;case 1:return -x+z;case 2:return x-z;case 3:return -x-z;case 4:return x;case 5:return -x;case 6:return z;default:return -z;}};
+// _F: correct Math.floor for negative numbers without the global property lookup
+const _F=x=>{const n=x|0;return n>x?n-1:n;};
+// g2 lookup tables replace switch-case: 2 array reads + 2 multiplications
+const _G2X=[1,-1,1,-1,1,-1,0,0],_G2Z=[1,1,-1,-1,0,0,1,-1];
+const g2=(h,x,z)=>{const i=h&7;return _G2X[i]*x+_G2Z[i]*z;};
 const g3=(h,x,y,z)=>{const u=h<8?x:y,v=h<4?y:(h===12||h===14?x:z);return((h&1)?-u:u)+((h&2)?-v:v);};
 function p2(x,z){
-  const fx=Math.floor(x),fz=Math.floor(z);
+  const fx=_F(x),fz=_F(z);
   const X=fx&255,Z=fz&255;x-=fx;z-=fz;
   const u=fade(x),v=fade(z),a=perm[X]+Z,b=perm[X+1]+Z;
   return lerp(lerp(g2(perm[a],x,z),g2(perm[b],x-1,z),u),lerp(g2(perm[a+1],x,z-1),g2(perm[b+1],x-1,z-1),u),v);
 }
 function p3(x,y,z){
-  const fx=Math.floor(x),fy=Math.floor(y),fz=Math.floor(z);
+  const fx=_F(x),fy=_F(y),fz=_F(z);
   const X=fx&255,Y=fy&255,Z=fz&255;
   x-=fx;y-=fy;z-=fz;
   const u=fade(x),v=fade(y),wf=fade(z);
@@ -117,7 +122,7 @@ function p3(x,y,z){
 function fbm2(x,z,oct,lac,gain){
   let v=0,a=1,f=1,mx=0;
   for(let i=0;i<oct;i++){v+=p2(x*f,z*f)*a;mx+=a;a*=gain;f*=lac;}
-  return v/mx;
+  return v*(1/mx);
 }
 function colRnd(a,b,salt){
   let h=(Math.imul(a,374761393)^Math.imul(b,668265263)^Math.imul(salt,2246822519))>>>0;
@@ -572,7 +577,7 @@ function _loadSpawnerReg(){
     const raw=w.getDynamicProperty(SPAWNER_REG_KEY);
     if(typeof raw==="string"&&raw.length>2){
       const arr=JSON.parse(raw);
-      for(const e of arr)_spawnerReg.set(_spawnerKey(e.x,e.y,e.z),e.mob);
+      for(const e of arr)_spawnerReg.set(_spawnerKey(e.x,e.y,e.z),{x:e.x,y:e.y,z:e.z,mob:e.mob});
     }
   }catch{}
 }
@@ -581,9 +586,8 @@ function _saveSpawnerReg(){
   _spawnerDirty=false;
   try{
     const arr=[];
-    for(const[k,mob] of _spawnerReg){
-      const[x,y,z]=k.split(",").map(Number);
-      arr.push({x,y,z,mob});
+    for(const e of _spawnerReg.values()){
+      arr.push({x:e.x,y:e.y,z:e.z,mob:e.mob});
       if(arr.length>=MAX_SPAWNER_ENTRIES)break;
     }
     w.setDynamicProperty(SPAWNER_REG_KEY,JSON.stringify(arr));
@@ -607,7 +611,7 @@ function placeSpawner(m,x,y,z,mob){
   const key=_spawnerKey(x,y,z);
   if(!_spawnerReg.has(key)){
     if(_spawnerReg.size<MAX_SPAWNER_ENTRIES){
-      _spawnerReg.set(key,mob);
+      _spawnerReg.set(key,{x,y,z,mob});
       _spawnerDirty=true;
     }
   }
@@ -627,8 +631,8 @@ s.runInterval(()=>{
     const m=dim();
     const players=w.getPlayers();
     const toRemove=[];
-    for(const[key,mob] of _spawnerReg){
-      const[x,y,z]=key.split(",").map(Number);
+    for(const[key,entry] of _spawnerReg){
+      const{x,y,z,mob}=entry;
       // Verify the spawner block still exists — if not, unregister.
       try{
         const b=m.getBlock({x,y,z});
@@ -744,7 +748,7 @@ function surfYM(wx,wz){
   let v=_syc.get(k);
   if(v===undefined){
     v=surfY(wx,wz);
-    if(_syc.size>20000)_syc.clear();
+    if(_syc.size>=25000){let n=0;for(const ek of _syc.keys()){_syc.delete(ek);if(++n>=5000)break;}}
     _syc.set(k,v);
   }
   return v;
@@ -855,6 +859,52 @@ function* prefillChunk(m,x0,z0,maxS,allOcean){
   return r;
 }
 
+// ── FAST COLUMN NOISE HELPERS (fillCol hot path) ───────────────────────────
+// _cp / _sp are module-level singletons; _cavePrep() writes column-constant
+// noise inputs once per column so caveAtF() / stoneBlkF() read properties
+// instead of recomputing multiplications on every y iteration.
+const _cp={rx:0,rz:0,c1x:0,c1z:0,c2x:0,c2z:0,s1x:0,s1z:0,s2x:0,s2z:0,t1x:0,t1z:0,t2x:0,t2z:0,dx:0,dz:0};
+const _sp={nax:0,naz:0,nbx:0,nbz:0,cbx:0,cbz:0,grpx:0,grpz:0,colx:0,colz:0,lux:0,drpx:0,drpz:0};
+function _cavePrep(wx,wz){
+  _cp.rx=wx*0.0025+40000;_cp.rz=wz*0.0025;
+  _cp.c1x=wx*0.012;_cp.c1z=wz*0.012+45000;
+  _cp.c2x=wx*0.02+47000;_cp.c2z=wz*0.02;
+  _cp.s1x=wx*0.035;_cp.s1z=wz*0.035;
+  _cp.s2x=wx*0.035+50;_cp.s2z=wz*0.035+50;
+  _cp.t1x=wx*0.025;_cp.t1z=wz*0.025;
+  _cp.t2x=wx*0.025+30;_cp.t2z=wz*0.025+30;
+  _cp.dx=wx*0.018;_cp.dz=wz*0.018;
+  _sp.nax=wx*0.04;_sp.naz=wz*0.04;
+  _sp.nbx=wx*0.04+400;_sp.nbz=wz*0.04+400;
+  _sp.cbx=wx*0.006+25000;_sp.cbz=wz*0.006;
+  _sp.grpx=wx*0.03+31000;_sp.grpz=wz*0.03;
+  _sp.colx=wx*0.05+6000;_sp.colz=wz*0.05;
+  _sp.lux=wx*0.05+7000;
+  _sp.drpx=wx*0.04+5000;_sp.drpz=wz*0.04;
+}
+function caveAtF(y){
+  if(y<=WMIN+2)return false;
+  const reg=p3(_cp.rx,y*0.0025,_cp.rz);
+  if(reg>0.10+y*0.0004){
+    if(p3(_cp.c1x,y*0.045,_cp.c1z)>0.34)return true;
+    if(p3(_cp.c2x,y*0.02,_cp.c2z)>0.58)return true;
+    return false;
+  }
+  const s7=y*0.0245;
+  const n1=p3(_cp.s1x,s7,_cp.s1z),n2=p3(_cp.s2x,s7,_cp.s2z);
+  if(n1*n1+n2*n2<0.016)return true;
+  if(y<=60&&y>=-260){const s15=y*0.015;const sv1=p3(_cp.t1x,s15,_cp.t1z),sv2=p3(_cp.t2x,s15+30,_cp.t2z);if(sv1*sv1+sv2*sv2<0.013)return true;}
+  if(y<=-80&&p3(_cp.dx,y*0.018,_cp.dz)>0.62)return true;
+  return false;
+}
+function stoneBlkF(wy,ds){
+  const na=p3(_sp.nax,wy*0.04,_sp.naz),nb=p3(_sp.nbx,wy*0.04,_sp.nbz);
+  if(ds){if(na>0.46&&wy>DS_TOP-60)return K.tuff;if(nb>0.54&&wy>DS_TOP-90)return K.calcite;if(na<-0.50)return K.dripstone;return K.deepslate;}
+  if(wy<80&&na>0.44)return K.granite;if(wy<100&&nb>0.45)return K.diorite;
+  if(na<-0.44)return K.andesite;if(wy<70&&na>0.52&&nb>0)return K.calcite;
+  return K.stone;
+}
+
 // ── FILL COLUMN (one column at a time: foundation → detail; returns top Y) ─
 // WATER CAVE LOGIC: regional zones (CAVE_WATER_T, now lowered → more common)
 // fill carved cave air up to a flat local level. Additionally, ANY carved
@@ -865,6 +915,7 @@ function fillCol(m,wx,wz,sy,bm,pre){
   const isCold=bm===9||bm===10||bm===16;
   const isDrip=p3(wx*0.03+5500,0,wz*0.03)>0.50;   // MORE COMMON dripstone
   const stTop=sy-5;
+  _cavePrep(wx,wz);
 
   const yFloor=Math.max(BY,WMIN);
   if(!pre.bed)sb(m,wx,yFloor,wz,K.bedrock);
@@ -897,7 +948,7 @@ function fillCol(m,wx,wz,sy,bm,pre){
   for(let y=yFloor+1;y<=sy;y++){
     const ds=y<=DS_TOP;
     const prefilled=ds?dsOK:stOK;
-    if(caveAt(wx,y,wz)){
+    if(caveAtF(y)){
       if(lavaCol&&y<=LAVA_LAKE_TOP)sb(m,wx,y,wz,K.lava);
       else if(y<=wLvl||(submerged&&y>=floodTop-30&&y<floodTop))sb(m,wx,y,wz,K.water);
       else{
@@ -907,8 +958,8 @@ function fillCol(m,wx,wz,sy,bm,pre){
           // The old amethyst side (cb<-0.50) is now LUSH caves (moss floors,
           // carpet, dripleaf/azalea added in the deferred caveDecorate pass).
           // Floor blocks penetrate 1-2 extra blocks down into the wall.
-          const cb=p3(wx*0.006+25000,y*0.006,wz*0.006);
-          const grp=p3(wx*0.03+31000,y*0.03,wz*0.03); // smooth grouping noise
+          const cb=p3(_sp.cbx,y*0.006,_sp.cbz);
+          const grp=p3(_sp.grpx,y*0.03,_sp.grpz);
           if(y<=DEEPDARK_TOP&&deepDark){                 // DEEP DARK / sculk floor
             sb(m,wx,y-1,wz,K.sculk);
             if(y-2>yFloor)sb(m,wx,y-2,wz,K.sculk);       // penetrate into floor
@@ -932,14 +983,14 @@ function fillCol(m,wx,wz,sy,bm,pre){
 
     let blk;
     if(!ds&&y>stTop)blk=K.stone;
-    else if(!ds&&isCold&&y<60&&p3(wx*0.05+6000,y*0.05,wz*0.05)>0.73)blk=K.packed_ice;
-    else if(!ds&&isLush&&y>-64&&y<40&&p3(wx*0.05+7000,y*0.05,wz*0.05)>0.62)blk=K.moss||stoneBlk(wx,y,wz,false);
-    else if(!ds&&isDrip&&!isLush&&y<50&&p3(wx*0.04+5000,y*0.04,wz*0.04)>0.56)blk=K.dripstone;
-    else blk=stoneBlk(wx,y,wz,ds);
+    else if(!ds&&isCold&&y<60&&p3(_sp.colx,y*0.05,_sp.colz)>0.73)blk=K.packed_ice;
+    else if(!ds&&isLush&&y>-64&&y<40&&p3(_sp.lux,y*0.05,_sp.colz)>0.62)blk=K.moss||stoneBlkF(y,false);
+    else if(!ds&&isDrip&&!isLush&&y<50&&p3(_sp.drpx,y*0.04,_sp.drpz)>0.56)blk=K.dripstone;
+    else blk=stoneBlkF(y,ds);
 
     if(prevCave){
-      const cb=p3(wx*0.006+25000,y*0.006,wz*0.006);
-      const grp=p3(wx*0.03+31000,y*0.03,wz*0.03);
+      const cb=p3(_sp.cbx,y*0.006,_sp.cbz);
+      const grp=p3(_sp.grpx,y*0.03,_sp.grpz);
       if(y<=DEEPDARK_TOP&&deepDark){                   // deep-dark ceiling → sculk
         blk=K.sculk;
       }else if(cb<-0.50){                              // lush-cave ceiling → moss
@@ -2518,7 +2569,7 @@ function* placeStructures(m,cx,cz,surfs,bms){
 // water, across the height range counts as unbuilt.
 const FULL=new Set();           // chunks fully complete (terrain+structures); persisted
 const TERRAIN=new Set();        // chunks whose terrain (phase 0) is complete
-const STRUCT_PENDING=new Set(); // terrain done, structures still owed
+const STRUCT_PENDING=new Map(); // key → {cx,cz}; terrain done, structures still owed
 const PROBE_BUILT=new Set();    // probe-confirmed built (built stays built)
 const PROBE_EMPTY=new Set();    // probe-confirmed empty (cleared once we build it)
 const _structWait=new Map();    // chunk → number of times its structure phase was deferred
@@ -2638,20 +2689,21 @@ let _currentJob=null,_jobCx=0,_jobCz=0,_jobFail0=0,_jobPhase=0;
 const STRUCT_GIVEUP=60;   // stamp a chunk's structures even if a neighbour never finishes building
 
 // Pick the next unit of work, or null when there is nothing to do right now.
+const _pcs=[];
+function _distSq(cx,cz){let best=Infinity;for(let i=0;i<_pcs.length;i+=2){const dx=cx-_pcs[i],dz=cz-_pcs[i+1],d=dx*dx+dz*dz;if(d<best)best=d;}return best;}
 function pickNext(m){
   let players;
   try{players=w.getPlayers();}catch{return null;}
   if(!players||!players.length)return null;
-  const pcs=[];
-  for(const p of players){const pl=p.location;pcs.push([Math.floor(pl.x/16),Math.floor(pl.z/16)]);}
-  const distSq=(cx,cz)=>{let best=Infinity;for(const c of pcs){const dx=cx-c[0],dz=cz-c[1],d=dx*dx+dz*dz;if(d<best)best=d;}return best;};
+  _pcs.length=0;
+  for(const p of players){const pl=p.location;_pcs.push(Math.floor(pl.x/16),Math.floor(pl.z/16));}
+  const distSq=_distSq;
   const REACH=(RADIUS+2)*(RADIUS+2);
 
   // 1) Finish structures for interior chunks (all 8 neighbours already have terrain).
   let bestS=null,bestSD=Infinity;
-  for(const k of STRUCT_PENDING){
+  for(const [k,{cx,cz}] of STRUCT_PENDING){
     if(FULL.has(k)){STRUCT_PENDING.delete(k);continue;}
-    const c=k.split(","),cx=+c[0],cz=+c[1];
     const d=distSq(cx,cz);
     if(d>REACH)continue;
     if(!chunkLoaded(m,cx,cz))continue;
@@ -2684,7 +2736,7 @@ function finishJob(){
   const k=ck(_jobCx,_jobCz);
   if(_jobPhase===0){
     TERRAIN.add(k);PROBE_EMPTY.delete(k);
-    STRUCT_PENDING.add(k);
+    STRUCT_PENDING.set(k,{cx:_jobCx,cz:_jobCz});
   }else{
     markDone(k);PROBE_EMPTY.delete(k);
     STRUCT_PENDING.delete(k);_structWait.delete(k);
