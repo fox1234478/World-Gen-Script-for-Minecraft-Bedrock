@@ -855,6 +855,52 @@ function* prefillChunk(m,x0,z0,maxS,allOcean){
   return r;
 }
 
+// ── FAST COLUMN NOISE HELPERS (fillCol hot path) ───────────────────────────
+// _cp / _sp are module-level singletons; _cavePrep() writes column-constant
+// noise inputs once per column so caveAtF() / stoneBlkF() read properties
+// instead of recomputing multiplications on every y iteration.
+const _cp={rx:0,rz:0,c1x:0,c1z:0,c2x:0,c2z:0,s1x:0,s1z:0,s2x:0,s2z:0,t1x:0,t1z:0,t2x:0,t2z:0,dx:0,dz:0};
+const _sp={nax:0,naz:0,nbx:0,nbz:0,cbx:0,cbz:0,grpx:0,grpz:0,colx:0,colz:0,lux:0,drpx:0,drpz:0};
+function _cavePrep(wx,wz){
+  _cp.rx=wx*0.0025+40000;_cp.rz=wz*0.0025;
+  _cp.c1x=wx*0.012;_cp.c1z=wz*0.012+45000;
+  _cp.c2x=wx*0.02+47000;_cp.c2z=wz*0.02;
+  _cp.s1x=wx*0.035;_cp.s1z=wz*0.035;
+  _cp.s2x=wx*0.035+50;_cp.s2z=wz*0.035+50;
+  _cp.t1x=wx*0.025;_cp.t1z=wz*0.025;
+  _cp.t2x=wx*0.025+30;_cp.t2z=wz*0.025+30;
+  _cp.dx=wx*0.018;_cp.dz=wz*0.018;
+  _sp.nax=wx*0.04;_sp.naz=wz*0.04;
+  _sp.nbx=wx*0.04+400;_sp.nbz=wz*0.04+400;
+  _sp.cbx=wx*0.006+25000;_sp.cbz=wz*0.006;
+  _sp.grpx=wx*0.03+31000;_sp.grpz=wz*0.03;
+  _sp.colx=wx*0.05+6000;_sp.colz=wz*0.05;
+  _sp.lux=wx*0.05+7000;
+  _sp.drpx=wx*0.04+5000;_sp.drpz=wz*0.04;
+}
+function caveAtF(y){
+  if(y<=WMIN+2)return false;
+  const reg=p3(_cp.rx,y*0.0025,_cp.rz);
+  if(reg>0.10+y*0.0004){
+    if(p3(_cp.c1x,y*0.045,_cp.c1z)>0.34)return true;
+    if(p3(_cp.c2x,y*0.02,_cp.c2z)>0.58)return true;
+    return false;
+  }
+  const s7=y*0.0245;
+  const n1=p3(_cp.s1x,s7,_cp.s1z),n2=p3(_cp.s2x,s7,_cp.s2z);
+  if(n1*n1+n2*n2<0.016)return true;
+  if(y<=60&&y>=-260){const s15=y*0.015;const sv1=p3(_cp.t1x,s15,_cp.t1z),sv2=p3(_cp.t2x,s15+30,_cp.t2z);if(sv1*sv1+sv2*sv2<0.013)return true;}
+  if(y<=-80&&p3(_cp.dx,y*0.018,_cp.dz)>0.62)return true;
+  return false;
+}
+function stoneBlkF(wy,ds){
+  const na=p3(_sp.nax,wy*0.04,_sp.naz),nb=p3(_sp.nbx,wy*0.04,_sp.nbz);
+  if(ds){if(na>0.46&&wy>DS_TOP-60)return K.tuff;if(nb>0.54&&wy>DS_TOP-90)return K.calcite;if(na<-0.50)return K.dripstone;return K.deepslate;}
+  if(wy<80&&na>0.44)return K.granite;if(wy<100&&nb>0.45)return K.diorite;
+  if(na<-0.44)return K.andesite;if(wy<70&&na>0.52&&nb>0)return K.calcite;
+  return K.stone;
+}
+
 // ── FILL COLUMN (one column at a time: foundation → detail; returns top Y) ─
 // WATER CAVE LOGIC: regional zones (CAVE_WATER_T, now lowered → more common)
 // fill carved cave air up to a flat local level. Additionally, ANY carved
@@ -865,6 +911,7 @@ function fillCol(m,wx,wz,sy,bm,pre){
   const isCold=bm===9||bm===10||bm===16;
   const isDrip=p3(wx*0.03+5500,0,wz*0.03)>0.50;   // MORE COMMON dripstone
   const stTop=sy-5;
+  _cavePrep(wx,wz);
 
   const yFloor=Math.max(BY,WMIN);
   if(!pre.bed)sb(m,wx,yFloor,wz,K.bedrock);
@@ -897,7 +944,7 @@ function fillCol(m,wx,wz,sy,bm,pre){
   for(let y=yFloor+1;y<=sy;y++){
     const ds=y<=DS_TOP;
     const prefilled=ds?dsOK:stOK;
-    if(caveAt(wx,y,wz)){
+    if(caveAtF(y)){
       if(lavaCol&&y<=LAVA_LAKE_TOP)sb(m,wx,y,wz,K.lava);
       else if(y<=wLvl||(submerged&&y>=floodTop-30&&y<floodTop))sb(m,wx,y,wz,K.water);
       else{
@@ -907,8 +954,8 @@ function fillCol(m,wx,wz,sy,bm,pre){
           // The old amethyst side (cb<-0.50) is now LUSH caves (moss floors,
           // carpet, dripleaf/azalea added in the deferred caveDecorate pass).
           // Floor blocks penetrate 1-2 extra blocks down into the wall.
-          const cb=p3(wx*0.006+25000,y*0.006,wz*0.006);
-          const grp=p3(wx*0.03+31000,y*0.03,wz*0.03); // smooth grouping noise
+          const cb=p3(_sp.cbx,y*0.006,_sp.cbz);
+          const grp=p3(_sp.grpx,y*0.03,_sp.grpz);
           if(y<=DEEPDARK_TOP&&deepDark){                 // DEEP DARK / sculk floor
             sb(m,wx,y-1,wz,K.sculk);
             if(y-2>yFloor)sb(m,wx,y-2,wz,K.sculk);       // penetrate into floor
@@ -932,14 +979,14 @@ function fillCol(m,wx,wz,sy,bm,pre){
 
     let blk;
     if(!ds&&y>stTop)blk=K.stone;
-    else if(!ds&&isCold&&y<60&&p3(wx*0.05+6000,y*0.05,wz*0.05)>0.73)blk=K.packed_ice;
-    else if(!ds&&isLush&&y>-64&&y<40&&p3(wx*0.05+7000,y*0.05,wz*0.05)>0.62)blk=K.moss||stoneBlk(wx,y,wz,false);
-    else if(!ds&&isDrip&&!isLush&&y<50&&p3(wx*0.04+5000,y*0.04,wz*0.04)>0.56)blk=K.dripstone;
-    else blk=stoneBlk(wx,y,wz,ds);
+    else if(!ds&&isCold&&y<60&&p3(_sp.colx,y*0.05,_sp.colz)>0.73)blk=K.packed_ice;
+    else if(!ds&&isLush&&y>-64&&y<40&&p3(_sp.lux,y*0.05,_sp.colz)>0.62)blk=K.moss||stoneBlkF(y,false);
+    else if(!ds&&isDrip&&!isLush&&y<50&&p3(_sp.drpx,y*0.04,_sp.drpz)>0.56)blk=K.dripstone;
+    else blk=stoneBlkF(y,ds);
 
     if(prevCave){
-      const cb=p3(wx*0.006+25000,y*0.006,wz*0.006);
-      const grp=p3(wx*0.03+31000,y*0.03,wz*0.03);
+      const cb=p3(_sp.cbx,y*0.006,_sp.cbz);
+      const grp=p3(_sp.grpx,y*0.03,_sp.grpz);
       if(y<=DEEPDARK_TOP&&deepDark){                   // deep-dark ceiling → sculk
         blk=K.sculk;
       }else if(cb<-0.50){                              // lush-cave ceiling → moss
@@ -2638,13 +2685,15 @@ let _currentJob=null,_jobCx=0,_jobCz=0,_jobFail0=0,_jobPhase=0;
 const STRUCT_GIVEUP=60;   // stamp a chunk's structures even if a neighbour never finishes building
 
 // Pick the next unit of work, or null when there is nothing to do right now.
+const _pcs=[];
+function _distSq(cx,cz){let best=Infinity;for(let i=0;i<_pcs.length;i+=2){const dx=cx-_pcs[i],dz=cz-_pcs[i+1],d=dx*dx+dz*dz;if(d<best)best=d;}return best;}
 function pickNext(m){
   let players;
   try{players=w.getPlayers();}catch{return null;}
   if(!players||!players.length)return null;
-  const pcs=[];
-  for(const p of players){const pl=p.location;pcs.push([Math.floor(pl.x/16),Math.floor(pl.z/16)]);}
-  const distSq=(cx,cz)=>{let best=Infinity;for(const c of pcs){const dx=cx-c[0],dz=cz-c[1],d=dx*dx+dz*dz;if(d<best)best=d;}return best;};
+  _pcs.length=0;
+  for(const p of players){const pl=p.location;_pcs.push(Math.floor(pl.x/16),Math.floor(pl.z/16));}
+  const distSq=_distSq;
   const REACH=(RADIUS+2)*(RADIUS+2);
 
   // 1) Finish structures for interior chunks (all 8 neighbours already have terrain).
