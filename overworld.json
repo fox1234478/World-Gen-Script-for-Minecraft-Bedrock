@@ -1,4 +1,5 @@
 //this is the part that extends the worl height -512 to 512 is max, must be multiples of 16
+//put this file into a folder named 'dimensions' so not forget the s
 {
   "format_version": "1.18.0",
   "minecraft:dimension": {
