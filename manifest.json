@@ -1,0 +1,49 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Fables of the Depths v16",
+    "description": "Overworld bounds -512..512. Auto-generates complex terrain (only apply to new worlds, will delete everything and/or break everything if applied to an existing world).",
+    "uuid": "ded7eb11-1a23-497f-84b1-503dbdc0df9f",
+    "version": [
+      1,
+      1,
+      6
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "uuid": "373c17a7-900a-4572-b837-bfef165fae3c",
+      "version": [
+        1,
+        1,
+        6
+      ]
+    },
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "94a2ceab-b13f-481d-aea6-7cbcfa439e48",
+      "version": [
+        1,
+        1,
+        6
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "2.4.0"
+    }
+  ],
+  "capabilities": [
+    "script_eval"
+  ]
+}
