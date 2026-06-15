@@ -1,21 +1,8 @@
-// main.js — Bedrock 1.21+  |  scripts/main.js
-// ════════════════════════ PERFORMANCE BUILD ════════════════════════
-// Improvements in this build vs the previous one:
-//  • STRUCTURES upgraded to equal-or-better-than-vanilla: 3-level modular
-//    stronghold with randomised room graph (library is now a 2-story hall),
-//    proper ship-hulled shipwrecks split into 3 loot chests, multi-room
-//    modular dungeons, bigger desert/jungle temples with trapped corridors.
-//  • LOOT improved everywhere; shipwrecks use supply/treasure/map tables and
-//    stronghold library chests now drop diamonds, ender pearls, xp bottles.
-//  • ORES: everything except coal is 4× more common with 1.5× bigger blobs.
-//  • TREES in forest-type biomes 1.25× less common + adjacency suppression so
-//    trees almost never spawn directly next to each other.
-//  • PASSIVE MOBS keep respawning near players on long, jittered intervals.
-//  • GEODES + FOSSILS spawn at ANY y and are spread out (no per-chunk groups).
-//  • WATER CAVES more common; caves opening into ocean/water features flood.
-//  All heavy builders are generators (yield) → watchdog-safe; runs on low-end
-//  devices (iPhone X tier) thanks to the time-budgeted scheduler.
-// ════════════════════════════════════════════════════════════════════
+//This is vide coded and not ment to make profit or gain in any way
+//Probably requires 1.21+, Definately reauires Beta Apis in Expirements, although test it if uou so desire
+//This is not acheivement friendly nor can I think of a way to make it so
+//Please feel free to make any edits and changes on your own end and publish them without credit or anything, Just do not monotize it.
+//This is only the main.js file that then goes in a scripts folder which then combined with a manifest.json and a dimensions folder makes the comolete addon that works
 
 import * as mc from "@minecraft/server";
 const w = mc.world, s = mc.system, B = mc.BlockPermutation;
@@ -26,8 +13,8 @@ const IS = mc.ItemStack    || null;  // chest loot (optional, auto-fallback)
 const BY=-512, DS_TOP=-256, SEA=62, BASE=64;
 const RADIUS=2;            // chunks generated around each player
 const YIELD_EVERY=1;       // columns per generator step (1 = finest, safest)
-const BUDGET_MS=5;         // ms of gen work per tick
-const MAX_STEPS_PER_TICK=40;// hard cap on generator steps per tick
+const BUDGET_MS=8;         // ms of gen work per tick (higher = faster gen, lower FPS)
+const MAX_STEPS_PER_TICK=256;// backstop on generator steps/tick; BUDGET_MS is the real limit
 const RETRY_DELAY_TICKS=20;// re-probe delay for unloaded chunks
 const FAIL_ABORT=2048;     // abort+requeue a job if this many writes fail
 const SCHED_INTERVAL=1;    // ticks between scheduler runs
@@ -37,6 +24,7 @@ const NOW=(typeof Date!=="undefined"&&typeof Date.now==="function")?Date.now:nul
 const CAVE_WATER_T=0.50;  // LOWERED (was 0.62) → water caves more common
 const LAVA_LAKE_T=0.88;
 const LAVA_LAKE_TOP=-200;
+const DEEPDARK_TOP=-300;   // sculk / deep-dark caves generate at this Y and below
 const P2N=1.45;
 const FILL_MAX_H=120;
 const VILLAGE_GRID=9;
@@ -80,16 +68,7 @@ function pickSpawn(){
 const setSpawn=()=>{
   pickSpawn();
   try{w.setDefaultSpawnLocation(SPAWN);}catch{cmd(`setworldspawn ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`);}
-  const scx=Math.floor(SPAWN.x/16),scz=Math.floor(SPAWN.z/16);
-  for(let dx=-RADIUS;dx<=RADIUS;dx++)for(let dz=-RADIUS;dz<=RADIUS;dz++){
-    const key=ck(scx+dx,scz+dz);
-    if(!isDone(key)&&!pend.has(key)){
-      pend.add(key);
-      const item={cx:scx+dx,cz:scz+dz};
-      (dx===0&&dz===0)?que.unshift(item):que.push(item);
-    }
-  }
-  kick();
+  kick();   // player-driven loader: generates the player's own chunk first, then grows outward
 };
 s.runTimeout(()=>{try{setSpawn();}catch{}},1);
 
@@ -121,13 +100,15 @@ const lerp=(a,b,t)=>a+t*(b-a);
 const g2=(h,x,z)=>{switch(h&7){case 0:return x+z;case 1:return -x+z;case 2:return x-z;case 3:return -x-z;case 4:return x;case 5:return -x;case 6:return z;default:return -z;}};
 const g3=(h,x,y,z)=>{const u=h<8?x:y,v=h<4?y:(h===12||h===14?x:z);return((h&1)?-u:u)+((h&2)?-v:v);};
 function p2(x,z){
-  const X=Math.floor(x)&255,Z=Math.floor(z)&255;x-=Math.floor(x);z-=Math.floor(z);
+  const fx=Math.floor(x),fz=Math.floor(z);
+  const X=fx&255,Z=fz&255;x-=fx;z-=fz;
   const u=fade(x),v=fade(z),a=perm[X]+Z,b=perm[X+1]+Z;
   return lerp(lerp(g2(perm[a],x,z),g2(perm[b],x-1,z),u),lerp(g2(perm[a+1],x,z-1),g2(perm[b+1],x-1,z-1),u),v);
 }
 function p3(x,y,z){
-  const X=Math.floor(x)&255,Y=Math.floor(y)&255,Z=Math.floor(z)&255;
-  x-=Math.floor(x);y-=Math.floor(y);z-=Math.floor(z);
+  const fx=Math.floor(x),fy=Math.floor(y),fz=Math.floor(z);
+  const X=fx&255,Y=fy&255,Z=fz&255;
+  x-=fx;y-=fy;z-=fz;
   const u=fade(x),v=fade(y),wf=fade(z);
   const A=perm[X]+Y,AA=perm[A]+Z,AB=perm[A+1]+Z,Bv=perm[X+1]+Y,BA=perm[Bv]+Z,BB=perm[Bv+1]+Z;
   return lerp(lerp(lerp(g3(perm[AA],x,y,z),g3(perm[BA],x-1,y,z),u),lerp(g3(perm[AB],x,y-1,z),g3(perm[BB],x-1,y-1,z),u),v),
@@ -173,16 +154,28 @@ function resolveBlocks(){
       ds_copper:B.resolve("minecraft:deepslate_copper_ore"),ds_gold:B.resolve("minecraft:deepslate_gold_ore"),
       ds_lapis:B.resolve("minecraft:deepslate_lapis_ore"),ds_redst:B.resolve("minecraft:deepslate_redstone_ore"),
       ds_diam:B.resolve("minecraft:deepslate_diamond_ore"),ds_emer:B.resolve("minecraft:deepslate_emerald_ore"),
-      oak_log:B.resolve("minecraft:oak_log"),oak_leaf:B.resolve("minecraft:oak_leaves"),
-      birch_log:B.resolve("minecraft:birch_log"),birch_leaf:B.resolve("minecraft:birch_leaves"),
-      spruce_log:B.resolve("minecraft:spruce_log"),spruce_leaf:B.resolve("minecraft:spruce_leaves"),
-      jungle_log:B.resolve("minecraft:jungle_log"),jungle_leaf:B.resolve("minecraft:jungle_leaves"),
-      acacia_log:B.resolve("minecraft:acacia_log"),acacia_leaf:B.resolve("minecraft:acacia_leaves"),
-      dark_oak_log:B.resolve("minecraft:dark_oak_log"),dark_oak_leaf:B.resolve("minecraft:dark_oak_leaves"),
-      mg_log:B.resolve("minecraft:mangrove_log"),mg_leaf:B.resolve("minecraft:mangrove_leaves"),
+      // Leaves: update_bit=true → game revalidates distance-to-log each tick,
+      // so script-placed leaves behave exactly like vanilla-placed ones:
+      // they stay while connected to logs and decay when logs are removed.
+      oak_log:B.resolve("minecraft:oak_log"),
+      oak_leaf:(()=>{try{return B.resolve("minecraft:oak_leaves").withState("update_bit",true).withState("persistent_bit",false);}catch{return B.resolve("minecraft:oak_leaves");}})(),
+      birch_log:B.resolve("minecraft:birch_log"),
+      birch_leaf:(()=>{try{return B.resolve("minecraft:birch_leaves").withState("update_bit",true).withState("persistent_bit",false);}catch{return B.resolve("minecraft:birch_leaves");}})(),
+      spruce_log:B.resolve("minecraft:spruce_log"),
+      spruce_leaf:(()=>{try{return B.resolve("minecraft:spruce_leaves").withState("update_bit",true).withState("persistent_bit",false);}catch{return B.resolve("minecraft:spruce_leaves");}})(),
+      jungle_log:B.resolve("minecraft:jungle_log"),
+      jungle_leaf:(()=>{try{return B.resolve("minecraft:jungle_leaves").withState("update_bit",true).withState("persistent_bit",false);}catch{return B.resolve("minecraft:jungle_leaves");}})(),
+      acacia_log:B.resolve("minecraft:acacia_log"),
+      acacia_leaf:(()=>{try{return B.resolve("minecraft:acacia_leaves").withState("update_bit",true).withState("persistent_bit",false);}catch{return B.resolve("minecraft:acacia_leaves");}})(),
+      dark_oak_log:B.resolve("minecraft:dark_oak_log"),
+      dark_oak_leaf:(()=>{try{return B.resolve("minecraft:dark_oak_leaves").withState("update_bit",true).withState("persistent_bit",false);}catch{return B.resolve("minecraft:dark_oak_leaves");}})(),
+      mg_log:B.resolve("minecraft:mangrove_log"),
+      mg_leaf:(()=>{try{return B.resolve("minecraft:mangrove_leaves").withState("update_bit",true).withState("persistent_bit",false);}catch{return B.resolve("minecraft:mangrove_leaves");}})(),
       mg_roots:B.resolve("minecraft:mangrove_roots"),
-      cherry_log:tryR("minecraft:cherry_log"),cherry_leaf:tryR("minecraft:cherry_leaves"),
-      pale_oak_log:tryR("minecraft:pale_oak_log"),pale_oak_leaf:tryR("minecraft:pale_oak_leaves"),
+      cherry_log:tryR("minecraft:cherry_log"),
+      cherry_leaf:(()=>{try{return tryR("minecraft:cherry_leaves")&&B.resolve("minecraft:cherry_leaves").withState("update_bit",true).withState("persistent_bit",false);}catch{return tryR("minecraft:cherry_leaves");}})(),
+      pale_oak_log:tryR("minecraft:pale_oak_log"),
+      pale_oak_leaf:(()=>{try{return tryR("minecraft:pale_oak_leaves")&&B.resolve("minecraft:pale_oak_leaves").withState("update_bit",true).withState("persistent_bit",false);}catch{return tryR("minecraft:pale_oak_leaves");}})(),
       m_cob:B.resolve("minecraft:mossy_cobblestone"),cobble:B.resolve("minecraft:cobblestone"),
       planks:B.resolve("minecraft:oak_planks"),obsidian:B.resolve("minecraft:obsidian"),
       chest:B.resolve("minecraft:chest"),spawner:B.resolve("minecraft:mob_spawner"),
@@ -197,9 +190,25 @@ function resolveBlocks(){
       seagrass:tryR("minecraft:seagrass"),kelp:tryR("minecraft:kelp"),
       lily_pad:tryR("minecraft:waterlily"),
       coral_blue:mkC("blue"),coral_pink:mkC("pink"),coral_purple:mkC("purple"),
-      coral_red:mkC("red"),coral_yellow:mkC("yellow"),coral_fan:tryR("minecraft:coral_fan"),
+      coral_red:mkC("red"),coral_yellow:mkC("yellow"),
+      // Standalone coral plants (not block form) — live colour variants
+      coral_plant_blue: tryR("minecraft:brain_coral"),
+      coral_plant_pink: tryR("minecraft:pink_coral"),
+      coral_plant_purple:tryR("minecraft:purple_coral"),
+      coral_plant_red:  tryR("minecraft:fire_coral"),
+      coral_plant_yellow:tryR("minecraft:horn_coral"),
+      // Coral fans — upward-facing (floor)
+      coral_fan_blue:   tryR("minecraft:coral_fan")&&(()=>{try{return B.resolve("minecraft:coral_fan").withState("coral_color","blue").withState("coral_fan_direction",0);}catch{return tryR("minecraft:coral_fan");}})(),
+      coral_fan_pink:   (()=>{try{return B.resolve("minecraft:coral_fan").withState("coral_color","pink").withState("coral_fan_direction",0);}catch{return tryR("minecraft:coral_fan");}})(),
+      coral_fan_purple: (()=>{try{return B.resolve("minecraft:coral_fan").withState("coral_color","purple").withState("coral_fan_direction",0);}catch{return tryR("minecraft:coral_fan");}})(),
+      coral_fan_red:    (()=>{try{return B.resolve("minecraft:coral_fan").withState("coral_color","red").withState("coral_fan_direction",0);}catch{return tryR("minecraft:coral_fan");}})(),
+      coral_fan_yellow: (()=>{try{return B.resolve("minecraft:coral_fan").withState("coral_color","yellow").withState("coral_fan_direction",0);}catch{return tryR("minecraft:coral_fan");}})(),
+      // Dead coral fan (floor) — for dead patches
+      dead_coral_fan:   (()=>{try{return B.resolve("minecraft:coral_fan_dead").withState("coral_fan_direction",0);}catch{return null;}})(),
+      sea_pickle:       tryR("minecraft:sea_pickle"),
       s_basalt:tryR("minecraft:smooth_basalt"),amethyst:tryR("minecraft:amethyst_block"),
       bud_amethyst:tryR("minecraft:budding_amethyst"),
+      am_cluster:tryR("minecraft:amethyst_cluster"),
       moss:tryR("minecraft:moss_block"),bookshelf:tryR("minecraft:bookshelf"),
       iron_bars:tryR("minecraft:iron_bars"),
       s_brick:tryR("minecraft:stone_bricks")||tryR("minecraft:stonebrick"),
@@ -221,7 +230,7 @@ function resolveBlocks(){
       fern:tryR("minecraft:fern"),firefly:tryR("minecraft:firefly_bush"),
       dead_bush:tryR("minecraft:dead_bush")||tryR("minecraft:deadbush"),
       brn_mush:tryR("minecraft:brown_mushroom"),red_mush:tryR("minecraft:red_mushroom"),
-      vine:tryR("minecraft:vine"),beehive:tryR("minecraft:beehive"),
+      vine:tryR("minecraft:vine"),bee_nest:tryR("minecraft:bee_nest"),
       creaking_heart:tryR("minecraft:creaking_heart"),
       red_sand:tryR("minecraft:red_sand"),
       terracotta:tryR("minecraft:terracotta"),
@@ -239,6 +248,30 @@ function resolveBlocks(){
       cobweb:tryR("minecraft:cobweb"),
       barrel:tryR("minecraft:barrel"),
       pointed_drip:tryR("minecraft:pointed_dripstone"),
+      // Lush-cave set
+      moss_carpet:tryR("minecraft:moss_carpet"),
+      azalea:tryR("minecraft:azalea"),
+      flow_azalea:tryR("minecraft:flowering_azalea"),
+      big_drip:tryR("minecraft:big_dripleaf"),
+      big_drip_stem:tryR("minecraft:big_dripleaf_stem"),
+      small_drip:tryR("minecraft:small_dripleaf"),
+      spore:tryR("minecraft:spore_blossom"),
+      glow_lichen:tryR("minecraft:glow_lichen"),
+      cave_vine:tryR("minecraft:cave_vines"),
+      cave_vine_berry:tryR("minecraft:cave_vines_body_with_berries")||tryR("minecraft:cave_vines"),
+      hanging_roots:tryR("minecraft:hanging_roots"),
+      rooted_dirt:tryR("minecraft:rooted_dirt"),
+      // Deep-dark / sculk set (naturally-generated shriekers can summon the warden)
+      sculk:tryR("minecraft:sculk"),
+      sculk_vein:tryR("minecraft:sculk_vein"),
+      sculk_sensor:tryR("minecraft:sculk_sensor"),
+      sculk_catalyst:tryR("minecraft:sculk_catalyst"),
+      sculk_shrieker:(()=>{try{return B.resolve("minecraft:sculk_shrieker").withState("can_summon",true);}catch{return tryR("minecraft:sculk_shrieker");}})(),
+      // Extra flowers (short + tall) for per-biome flower sets
+      red_tulip:tryR("minecraft:red_tulip"),orange_tulip:tryR("minecraft:orange_tulip"),
+      white_tulip:tryR("minecraft:white_tulip"),pink_tulip:tryR("minecraft:pink_tulip"),
+      rose_bush:tryR("minecraft:rose_bush"),peony:tryR("minecraft:peony"),
+      lilac:tryR("minecraft:lilac"),sunflower:tryR("minecraft:sunflower"),
     };
     return true;
   }catch{K=null;return false;}
@@ -260,6 +293,14 @@ function bulkFill(m,x1,y1,z1,x2,y2,z2,pk){
   if(!pk||!BV||typeof m.fillBlocks!=="function")return false;
   try{m.fillBlocks(new BV({x:x1,y:y1,z:z1},{x:x2,y:y2,z:z2}),pk);return true;}
   catch{return false;}
+}
+// Place a 2-tall plant (tall flowers, small dripleaf) using upper_block_bit.
+function placeTall(m,x,y,z,base){
+  if(!base)return;
+  try{
+    sb(m,x,y,z,base.withState("upper_block_bit",false));
+    sb(m,x,y+1,z,base.withState("upper_block_bit",true));
+  }catch{sb(m,x,y,z,base);}
 }
 
 // ── LOOT SYSTEM ────────────────────────────────────────────────
@@ -287,6 +328,12 @@ const LOOT={
     {id:"minecraft:name_tag",min:1,max:1,w:3},
     {id:"minecraft:experience_bottle",min:2,max:6,w:3},
     {id:"minecraft:music_disc_cat",min:1,max:1,w:2},
+    {id:"minecraft:music_disc_13",min:1,max:1,w:2},
+    {id:"minecraft:enchanted_book",min:1,max:1,w:2},
+    {id:"minecraft:emerald",min:1,max:4,w:3},
+    {id:"minecraft:slime_ball",min:1,max:4,w:3},
+    {id:"minecraft:lead",min:1,max:1,w:2},
+    {id:"minecraft:cooked_beef",min:1,max:3,w:4},
     {id:"minecraft:golden_apple",min:1,max:1,w:2},
     {id:"minecraft:diamond",min:1,max:2,w:2},
     {id:"minecraft:enchanted_golden_apple",min:1,max:1,w:1},
@@ -305,6 +352,9 @@ const LOOT={
     {id:"minecraft:diamond",min:1,max:3,w:3},
     {id:"minecraft:enchanted_book",min:1,max:1,w:3},
     {id:"minecraft:golden_apple",min:1,max:2,w:2},
+    {id:"minecraft:music_disc_far",min:1,max:1,w:2},
+    {id:"minecraft:spyglass",min:1,max:1,w:2},
+    {id:"minecraft:lapis_lazuli",min:2,max:6,w:4},
     {id:"minecraft:eye_of_ender",min:1,max:3,w:1},
   ]},
   prison:{rolls:[2,5],pool:[
@@ -322,6 +372,10 @@ const LOOT={
     {id:"minecraft:emerald",min:1,max:5,w:6},
     {id:"minecraft:experience_bottle",min:2,max:6,w:5},
     {id:"minecraft:diamond",min:1,max:3,w:4},
+    {id:"minecraft:enchanted_book",min:1,max:1,w:3},
+    {id:"minecraft:golden_carrot",min:1,max:3,w:3},
+    {id:"minecraft:redstone",min:4,max:9,w:5},
+    {id:"minecraft:gold_block",min:1,max:1,w:2},
     {id:"minecraft:name_tag",min:1,max:1,w:3},
     {id:"minecraft:enchanted_golden_apple",min:1,max:1,w:1},
   ]},
@@ -380,7 +434,6 @@ const LOOT={
     {id:"minecraft:emerald",min:1,max:5,w:5},
     {id:"minecraft:diamond",min:1,max:3,w:3},
     {id:"minecraft:experience_bottle",min:2,max:6,w:3},
-    {id:"minecraft:heart_of_the_sea",min:1,max:1,w:1},
   ]},
   shipwreck_map:{rolls:[3,6],pool:[
     {id:"minecraft:empty_map",min:1,max:2,w:10},
@@ -401,6 +454,9 @@ const LOOT={
     {id:"minecraft:iron_ingot",min:2,max:6,w:5},
     {id:"minecraft:experience_bottle",min:2,max:6,w:4},
     {id:"minecraft:diamond",min:1,max:3,w:3},
+    {id:"minecraft:horse_armor_gold",min:1,max:1,w:2},
+    {id:"minecraft:horse_armor_iron",min:1,max:1,w:2},
+    {id:"minecraft:saddle",min:1,max:1,w:2},
     {id:"minecraft:enchanted_book",min:1,max:1,w:2},
     {id:"minecraft:enchanted_golden_apple",min:1,max:1,w:1},
   ]},
@@ -436,21 +492,43 @@ const LOOT={
 };
 for(const k in LOOT)LOOT[k].total=LOOT[k].pool.reduce((a,p)=>a+p.w,0);
 
-function lootFill(c,table,x,y,z){
+function lootFill(c,table,x,y,z,guaranteed){
   const t=LOOT[table]||LOOT.default;
   let h=((Math.imul(x|0,374761393)^Math.imul(y|0,668265263)^Math.imul(z|0,1274126177))>>>0)||1;
   const rnd=()=>{h=(Math.imul(h,1664525)+1013904223)>>>0;return h/4294967296;};
   const rolls=t.rolls[0]+((rnd()*(t.rolls[1]-t.rolls[0]+1))|0);
+  // Per-chest mutable weights: each time an entry is picked its weight decays,
+  // so repeated identical drops are far less likely → more varied chests.
+  const wts=t.pool.map(p=>p.w);
+  let total=t.total;
+  // Distinct, shuffled slots so rolls never overwrite each other.
+  const slots=[];for(let i=0;i<c.size;i++)slots.push(i);
+  for(let i=slots.length-1;i>0;i--){const j=(rnd()*(i+1))|0;const tmp=slots[i];slots[i]=slots[j];slots[j]=tmp;}
+  let sp=0;
   for(let i=0;i<rolls;i++){
-    let r=rnd()*t.total,e=t.pool[0];
-    for(const p of t.pool){r-=p.w;if(r<=0){e=p;break;}}
+    if(total<=0.0001){total=0;for(let k=0;k<wts.length;k++)total+=wts[k];if(total<=0)break;}
+    let r=rnd()*total,ei=0;
+    for(let k=0;k<t.pool.length;k++){r-=wts[k];if(r<=0){ei=k;break;}}
+    const e=t.pool[ei];
     const n=e.min+((rnd()*(e.max-e.min+1))|0);
-    try{c.setItem((rnd()*c.size)|0,new IS(e.id,Math.max(1,n)));}catch{}
+    total-=wts[ei]*0.6;wts[ei]*=0.4;          // decay this entry's weight
+    const slot=slots[sp++%slots.length];
+    try{c.setItem(slot,new IS(e.id,Math.max(1,n)));}catch{}
+  }
+  // Guaranteed items: dropped into the first empty slot so they always make it in.
+  if(guaranteed)for(const g of guaranteed){
+    try{
+      let slot=-1;
+      for(let s2=0;s2<c.size;s2++){if(!c.getItem(s2)){slot=s2;break;}}
+      if(slot<0)slot=slots[(rnd()*slots.length)|0];
+      c.setItem(slot,new IS(g.id,Math.max(1,g.count||1)));
+    }catch{}
   }
 }
 // The only sanctioned way to place a chest. Places block, fills container,
-// retries once next tick if the block entity lags.
-function placeChest(m,x,y,z,table){
+// retries once next tick if the block entity lags. `guaranteed` (optional) is
+// an array of {id,count} that is always inserted (e.g. shipwreck heart-of-the-sea).
+function placeChest(m,x,y,z,table,guaranteed){
   sb(m,x,y,z,K.chest);
   if(!IS)return;
   const fill=()=>{
@@ -460,12 +538,125 @@ function placeChest(m,x,y,z,table){
       const inv=b.getComponent("minecraft:inventory");
       const c=inv&&inv.container;
       if(!c)return false;
-      lootFill(c,table,x,y,z);
+      lootFill(c,table,x,y,z,guaranteed);
       return true;
     }catch{return false;}
   };
   if(!fill())try{s.run(fill);}catch{}
 }
+
+// ── OPTION-1 PERSISTENT SPAWNER REGISTRY ───────────────────────
+// Script-placed mob_spawner blocks can't be configured via API, so we maintain
+// a registry of {x,y,z,mob} entries and periodically spawn mobs ourselves —
+// but ONLY while the spawner block is still present at that location.  If a
+// player mines the spawner the registry entry is removed and spawning stops.
+//
+// Persistence: the registry is serialised to a single dynamic property
+// (JSON string) so it survives world reloads. We cap entries at 512 to keep
+// the property under Bedrock's ~32 KB limit per property.
+const SPAWNER_REG_KEY="wgSpawners";
+const MAX_SPAWNER_ENTRIES=512;
+const SPAWNER_CAP=6;         // max living mobs per spawner
+const SPAWNER_RADIUS=16;     // only active when a player is within this many blocks
+const SPAWNER_INTERVAL=100;  // ticks between registry sweeps (5 s)
+const SPAWNER_CHANCE=0.40;   // probability to attempt a spawn per active entry per sweep
+
+// In-memory map: key "x,y,z" → mob string (no "minecraft:" prefix)
+const _spawnerReg=new Map();
+let _spawnerDirty=false;
+
+function _spawnerKey(x,y,z){return x+","+y+","+z;}
+
+function _loadSpawnerReg(){
+  try{
+    const raw=w.getDynamicProperty(SPAWNER_REG_KEY);
+    if(typeof raw==="string"&&raw.length>2){
+      const arr=JSON.parse(raw);
+      for(const e of arr)_spawnerReg.set(_spawnerKey(e.x,e.y,e.z),e.mob);
+    }
+  }catch{}
+}
+function _saveSpawnerReg(){
+  if(!_spawnerDirty)return;
+  _spawnerDirty=false;
+  try{
+    const arr=[];
+    for(const[k,mob] of _spawnerReg){
+      const[x,y,z]=k.split(",").map(Number);
+      arr.push({x,y,z,mob});
+      if(arr.length>=MAX_SPAWNER_ENTRIES)break;
+    }
+    w.setDynamicProperty(SPAWNER_REG_KEY,JSON.stringify(arr));
+  }catch{}
+}
+
+// Called at startup — defer one tick so the dimension is ready.
+s.runTimeout(()=>{try{_loadSpawnerReg();}catch{}},2);
+
+// Register a spawner. Also places the block and seeds the initial mobs (as
+// before), but now the registry keeps them coming back long-term.
+const _spOff=[[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[2,0,0],[0,0,2],[0,1,0]];
+function dungeonMob(x,z){
+  const r=colRnd(x,z,313);
+  return r<0.40?"zombie":r<0.72?"skeleton":r<0.90?"spider":"cave_spider";
+}
+function placeSpawner(m,x,y,z,mob){
+  sb(m,x,y,z,K.spawner);
+  if(!mob)return;
+  // Register for recurring spawns
+  const key=_spawnerKey(x,y,z);
+  if(!_spawnerReg.has(key)){
+    if(_spawnerReg.size<MAX_SPAWNER_ENTRIES){
+      _spawnerReg.set(key,mob);
+      _spawnerDirty=true;
+    }
+  }
+  // Seed the room with a small initial group
+  let placed=0;
+  for(const o of _spOff){
+    if(placed>=3)break;
+    try{m.spawnEntity("minecraft:"+mob,{x:x+o[0]+0.5,y:y+o[1],z:z+o[2]+0.5});placed++;}catch{}
+  }
+}
+
+// Periodic sweep: for each registered spawner check block still exists,
+// player is nearby, mob count is below cap, then maybe spawn one more.
+s.runInterval(()=>{
+  if(!K||_spawnerReg.size===0)return;
+  try{
+    const m=dim();
+    const players=w.getPlayers();
+    const toRemove=[];
+    for(const[key,mob] of _spawnerReg){
+      const[x,y,z]=key.split(",").map(Number);
+      // Verify the spawner block still exists — if not, unregister.
+      try{
+        const b=m.getBlock({x,y,z});
+        if(!b||!b.typeId.includes("mob_spawner")){toRemove.push(key);continue;}
+      }catch{continue;}
+      // Check player proximity
+      let nearP=false;
+      for(const p of players){
+        const pl=p.location;
+        if(Math.abs(pl.x-x)<=SPAWNER_RADIUS&&Math.abs(pl.y-y)<=SPAWNER_RADIUS*2&&Math.abs(pl.z-z)<=SPAWNER_RADIUS){nearP=true;break;}
+      }
+      if(!nearP)continue;
+      if(Math.random()>SPAWNER_CHANCE)continue;
+      // Count nearby mobs of this type
+      let count=0;
+      try{
+        const nearby=m.getEntities({type:"minecraft:"+mob,location:{x,y,z},maxDistance:SPAWNER_RADIUS});
+        count=nearby.length;
+      }catch{}
+      if(count>=SPAWNER_CAP)continue;
+      // Spawn one in a random adjacent air position
+      const off=_spOff[(Math.random()*_spOff.length)|0];
+      try{m.spawnEntity("minecraft:"+mob,{x:x+off[0]+0.5,y:y+off[1],z:z+off[2]+0.5});}catch{}
+    }
+    for(const k of toRemove){_spawnerReg.delete(k);_spawnerDirty=true;}
+    _saveSpawnerReg();
+  }catch{}
+},SPAWNER_INTERVAL);
 
 // ── BIOME ──────────────────────────────────────────────────────
 //  0=ocean 1=desert 2=savanna 3=plains 4=forest 5=birch
@@ -477,25 +668,28 @@ function biome(wx,wz,sy){
     if(sy>=SEA-20&&fbm2(wx*8e-4+500,wz*8e-4,2,2.0,0.5)>0.30)return 12;
     return 0;
   }
-  if(sy>190)return 11;
+  if(sy>178)return 11;
   if(Math.max(Math.abs(wx),Math.abs(wz))>1500&&Math.abs(p2(wx*1.5e-4+8888,wz*1.5e-4))<0.015)return 17;
   const t=fbm2(wx*8e-4+500,wz*8e-4,3,2.0,0.5);
   const h=fbm2(wx*9e-4,    wz*9e-4+500,3,2.0,0.5);
-  if(t<-0.60)return 16;
-  if(t<-0.50)return 10;
-  if(t<-0.20)return 9;
-  if(t>-0.20&&t<-0.05&&h<0.04)return 15;
-  if(t>0.50&&h<-0.10)return 1;
-  if(t>0.42&&h>0.25&&sy>SEA+8)return 18;
-  if(t>0.30&&h<0.15)return 2;
-  if(t>0.20&&h>0.35&&sy<=SEA+6)return 7;
-  if(h>0.30&&sy<=SEA+8)return 8;
-  if(h>0.40&&t>0.05&&t<0.30)return 13;
-  if(t>0.25&&h>0.35)return 6;
-  if(t>0.10&&h>0.10&&h<0.32&&t<0.38)return 14;
-  if(h>0.25&&t<0.10)return 5;
-  if(h>0.10)return 4;
-  return 3;
+  // Temperature thresholds recalibrated to the noise's true distribution so the
+  // hot (desert/savanna/mesa) and cold (taiga/snowy/ice-spikes) biomes all
+  // generate at sensible frequencies instead of sitting in unreachable tails.
+  if(t<-0.37)return 16;                          // ice spikes
+  if(t<-0.27)return 10;                          // snowy
+  if(t<-0.16)return 9;                           // taiga
+  if(t>=-0.16&&t<-0.04&&h<0.04)return 15;        // pale garden
+  if(t>0.26&&h<0.00)return 1;                    // desert (hot & dry)
+  if(t>0.27&&h>0.15&&sy>SEA+8)return 18;         // mesa (hot, raised)
+  if(t>0.15&&h<0.12)return 2;                    // savanna (warm & dryish)
+  if(t>0.16&&h>0.40&&sy<=SEA+6)return 7;         // mangrove (hot wet lowland)
+  if(t>0.18&&h>0.30)return 6;                    // jungle (hot & wet)
+  if(h>0.34&&sy<=SEA+8)return 8;                 // swamp
+  if(h>0.44&&t>0.04&&t<0.30)return 13;           // dark oak
+  if(t>0.08&&h>0.10&&h<0.34&&t<0.34)return 14;   // cherry
+  if(h>0.24&&t<0.08)return 5;                    // birch
+  if(h>0.10)return 4;                            // forest
+  return 3;                                      // plains
 }
 
 // ── TERRAIN HEIGHT ─────────────────────────────────────────────
@@ -506,9 +700,9 @@ function surfY(wx,wz){
   const d=fbm2(wx*5.0e-2+3000,  wz*5.0e-2,       2,2.3,0.35)*5;
   let sy=Math.round(BASE+c+h+rr+d);
   const mt=fbm2(wx*5.5e-4+15000,wz*5.5e-4,3,2.0,0.5)*P2N;
-  if(mt>0.26){
+  if(mt>0.20){
     const ridge=1-Math.abs(p2(wx*2.2e-3+16000,wz*2.2e-3));
-    const f=Math.min(1,(mt-0.26)/0.22);
+    const f=Math.min(1,(mt-0.20)/0.26);
     sy+=Math.round(f*f*(140+ridge*240));
   }
   const mshDist=Math.max(Math.abs(wx),Math.abs(wz));
@@ -540,8 +734,13 @@ function surfY(wx,wz){
   return sy;
 }
 const _syc=new Map();
+const _SYC_OFF=33554432;          // 2^25 — keeps the packed key positive and exactly representable
 function surfYM(wx,wz){
-  const k=wx+","+wz;
+  // Pack the column coord into a single exact integer key (valid across the full
+  // ±30M Bedrock world border); fall back to a string key only past 2^25.
+  const k=(wx>=-_SYC_OFF&&wx<_SYC_OFF&&wz>=-_SYC_OFF&&wz<_SYC_OFF)
+    ?(wx+_SYC_OFF)*67108864+(wz+_SYC_OFF)
+    :wx+","+wz;
   let v=_syc.get(k);
   if(v===undefined){
     v=surfY(wx,wz);
@@ -628,13 +827,24 @@ function* placeVeins(m,cx,cz,surfs,bms){
   }
 }
 
-// ── BULK PREFILL (per chunk: bedrock floor + deep-ocean water only) ──
+// ── BULK PREFILL (per chunk: bedrock floor + deepslate band + deep-ocean water) ──
 function* prefillChunk(m,x0,z0,maxS,allOcean){
-  const r={bed:false,water:false,waterTop:maxS};
+  const r={bed:false,water:false,waterTop:maxS,dsOK:false};
   if(!BV||typeof m.fillBlocks!=="function")return r;
   const yFloor=Math.max(BY,WMIN);
   r.bed=bulkFill(m,x0,yFloor,z0,x0+15,yFloor,z0+15,K.bedrock);
   yield;
+  // Deepslate band (dsLo..DS_TOP) is the same height across the whole chunk, so
+  // fill it once chunk-wide instead of once per column (was 256 fills/chunk in
+  // deep worlds). Caves/variants still override per-block in fillCol.
+  const dsLo=Math.max(BY+1,WMIN+1);
+  if(dsLo<=DS_TOP){
+    r.dsOK=true;
+    for(let y=dsLo;y<=DS_TOP;y+=FILL_MAX_H){
+      if(!bulkFill(m,x0,y,z0,x0+15,Math.min(y+FILL_MAX_H-1,DS_TOP),z0+15,K.deepslate))r.dsOK=false;
+      yield;
+    }
+  }else r.dsOK=true;   // no deepslate band in shallow worlds → nothing to fill
   if(allOcean&&maxS<SEA){
     r.water=true;
     for(let y=maxS+1;y<=SEA;y+=FILL_MAX_H){
@@ -653,16 +863,15 @@ function* prefillChunk(m,x0,z0,maxS,allOcean){
 function fillCol(m,wx,wz,sy,bm,pre){
   const isLush=bm===4||bm===5||bm===6||bm===14;
   const isCold=bm===9||bm===10||bm===16;
-  const isDrip=p3(wx*0.03+5500,0,wz*0.03)>0.60;
+  const isDrip=p3(wx*0.03+5500,0,wz*0.03)>0.50;   // MORE COMMON dripstone
   const stTop=sy-5;
 
   const yFloor=Math.max(BY,WMIN);
   if(!pre.bed)sb(m,wx,yFloor,wz,K.bedrock);
 
   const stLo=Math.max(DS_TOP+1,WMIN+1);
-  const dsLo=Math.max(BY+1,WMIN+1);
   const stOK=sy>=stLo?bulkFill(m,wx,stLo,wz,wx,sy,wz,K.stone):false;
-  const dsOK=dsLo<=DS_TOP?bulkFill(m,wx,dsLo,wz,wx,DS_TOP,wz,K.deepslate):true;
+  const dsOK=pre.dsOK;   // deepslate band was pre-filled chunk-wide in prefillChunk
 
   // Water-cave zone field (regional, ANY height; recedes near zone edges so
   // there's never a vertical water wall or suspended water).
@@ -674,6 +883,13 @@ function fillCol(m,wx,wz,sy,bm,pre){
     wLvl=lvl-Math.round((1-edge)*36);
   }
   const lavaCol=p2(wx*0.007+30000,wz*0.007)*P2N>LAVA_LAKE_T;
+  // Submerged column (ocean / river / lake): caves opening just under the water
+  // body flood, becoming water caves.
+  const submerged=sy<SEA;
+  const floodTop=submerged?sy:-1e9;
+  // Deep dark: caves at DEEPDARK_TOP (-300) and below get sculk-coated in coherent
+  // regional patches. Sensors / shriekers are added in the deferred decorate pass.
+  const deepDark=!!K.sculk&&(p2(wx*0.004+33000,wz*0.004)*P2N>-0.05);
 
   let top=yFloor;
   let prevCave=false;
@@ -683,20 +899,30 @@ function fillCol(m,wx,wz,sy,bm,pre){
     const prefilled=ds?dsOK:stOK;
     if(caveAt(wx,y,wz)){
       if(lavaCol&&y<=LAVA_LAKE_TOP)sb(m,wx,y,wz,K.lava);
-      else if(y<=wLvl)sb(m,wx,y,wz,K.water);
+      else if(y<=wLvl||(submerged&&y>=floodTop-30&&y<floodTop))sb(m,wx,y,wz,K.water);
       else{
         if(prefilled)sb(m,wx,y,wz,K.air);
         if(!prevCave&&y-1>yFloor){
+          // cb = cave-content field. Mushroom side (cb>0.45) → mushroom caves.
+          // The old amethyst side (cb<-0.50) is now LUSH caves (moss floors,
+          // carpet, dripleaf/azalea added in the deferred caveDecorate pass).
+          // Floor blocks penetrate 1-2 extra blocks down into the wall.
           const cb=p3(wx*0.006+25000,y*0.006,wz*0.006);
-          if(cb>0.38){
+          const grp=p3(wx*0.03+31000,y*0.03,wz*0.03); // smooth grouping noise
+          if(y<=DEEPDARK_TOP&&deepDark){                 // DEEP DARK / sculk floor
+            sb(m,wx,y-1,wz,K.sculk);
+            if(y-2>yFloor)sb(m,wx,y-2,wz,K.sculk);       // penetrate into floor
+            if(grp>0.55&&K.sculk_vein)sb(m,wx,y,wz,K.sculk_vein);
+          }else if(cb>0.45){                             // MUSHROOM CAVE floor
             sb(m,wx,y-1,wz,K.mycelium);
-            const r=colRnd(wx+y,wz-y,77);
-            if(r<0.22&&K.brn_mush)sb(m,wx,y,wz,r<0.10?K.red_mush:K.brn_mush);
-            else if(r<0.27)sb(m,wx,y,wz,K.brn_mush_blk);
-          }else if(cb<-0.38){
-            const r=colRnd(wx-y,wz+y,79);
-            sb(m,wx,y-1,wz,r<0.18?(K.bud_amethyst||K.amethyst):(r<0.60?(K.amethyst||K.calcite):K.calcite));
-            if(r>0.88&&K.amethyst)sb(m,wx,y,wz,K.amethyst);
+            if(y-2>yFloor)sb(m,wx,y-2,wz,K.mycelium);    // penetrate into floor
+            if(grp>0.40&&K.brn_mush)sb(m,wx,y,wz,grp>0.72?K.red_mush:K.brn_mush);
+          }else if(cb<-0.50){                            // LUSH CAVE floor
+            const M=K.moss||K.mycelium;
+            sb(m,wx,y-1,wz,M);
+            if(y-2>yFloor)sb(m,wx,y-2,wz,K.rooted_dirt||M);  // penetrate into floor
+            if(grp>0.30&&K.moss_carpet)sb(m,wx,y,wz,K.moss_carpet);
+            else if(grp<-0.50&&K.t_grass)sb(m,wx,y,wz,K.t_grass);
           }
         }
       }
@@ -707,15 +933,20 @@ function fillCol(m,wx,wz,sy,bm,pre){
     let blk;
     if(!ds&&y>stTop)blk=K.stone;
     else if(!ds&&isCold&&y<60&&p3(wx*0.05+6000,y*0.05,wz*0.05)>0.73)blk=K.packed_ice;
-    else if(!ds&&isLush&&y>-64&&y<40&&p3(wx*0.05+7000,y*0.05,wz*0.05)>0.72)blk=K.moss||stoneBlk(wx,y,wz,false);
-    else if(!ds&&isDrip&&!isLush&&y<50&&p3(wx*0.04+5000,y*0.04,wz*0.04)>0.66)blk=K.dripstone;
+    else if(!ds&&isLush&&y>-64&&y<40&&p3(wx*0.05+7000,y*0.05,wz*0.05)>0.62)blk=K.moss||stoneBlk(wx,y,wz,false);
+    else if(!ds&&isDrip&&!isLush&&y<50&&p3(wx*0.04+5000,y*0.04,wz*0.04)>0.56)blk=K.dripstone;
     else blk=stoneBlk(wx,y,wz,ds);
 
     if(prevCave){
       const cb=p3(wx*0.006+25000,y*0.006,wz*0.006);
-      const r=colRnd(wx,y^wz,83);
-      if(cb<-0.38&&r<0.30&&K.amethyst)blk=K.amethyst;
-      else if(cb>0.38&&r<0.18)blk=K.brn_mush_blk;
+      const grp=p3(wx*0.03+31000,y*0.03,wz*0.03);
+      if(y<=DEEPDARK_TOP&&deepDark){                   // deep-dark ceiling → sculk
+        blk=K.sculk;
+      }else if(cb<-0.50){                              // lush-cave ceiling → moss
+        blk=K.moss||blk;
+      }else if(cb>0.45&&grp>0.30){                     // mushroom-cave ceiling
+        blk=K.brn_mush_blk;
+      }
     }
     prevCave=false;
 
@@ -725,13 +956,21 @@ function fillCol(m,wx,wz,sy,bm,pre){
 
   const ty=top;
 
+  // Vertical water filler: bulk-fill tall runs (1 engine call) instead of
+  // placing each block; fall back to per-block for short runs / no-BV.
+  const fillWater=(y1,y2)=>{
+    if(y2<y1)return;
+    if(y2-y1>=3&&bulkFill(m,wx,y1,wz,wx,y2,wz,K.water))return;
+    for(let y=y1;y<=y2;y++)sb(m,wx,y,wz,K.water);
+  };
+
   // Ocean / river / lake — also floods cave shafts opening at the seabed,
   // turning any cave that opens into the ocean into a water cave.
   if(sy<SEA){
-    for(let y=top+1;y<=sy;y++)sb(m,wx,y,wz,K.water);
+    fillWater(top+1,sy);
     if(bm===1||bm===2){sb(m,wx,ty,wz,K.sand);for(let d=1;d<=2&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.sand);return ty;}
     const wTop=pre.water?Math.min(pre.waterTop,SEA):SEA;
-    for(let y=sy+1;y<=wTop;y++)sb(m,wx,y,wz,K.water);
+    fillWater(sy+1,wTop);
     if(bm===0){
       const ot=fbm2(wx*8e-4+500,wz*8e-4,2,2.0,0.5);
       const coastal=fbm2(wx*1.2e-3,wz*1.2e-3,2,2.0,0.5)>-0.12;
@@ -826,7 +1065,7 @@ function placeOak(m,wx,ty,wz){
   leafLayer(m,wx,ty+h,  wz,K.oak_leaf,1,1,rnd);
   leafLayer(m,wx,ty+h+1,wz,K.oak_leaf,1,2,rnd);
   trunk1(m,wx,ty,wz,K.oak_log,h);
-  if(K.beehive&&rnd()>0.95)sb(m,wx+1,ty+h-2,wz,K.beehive);
+  if(K.bee_nest&&rnd()>0.95)sb(m,wx+1,ty+h-2,wz,K.bee_nest);
 }
 function placeBirch(m,wx,ty,wz){
   const rnd=mkTRnd(wx,wz,103);
@@ -919,14 +1158,43 @@ function placeMangrove(m,wx,ty,wz){
 function placeCherry(m,wx,ty,wz){
   if(!K.cherry_log)return placeOak(m,wx,ty,wz);
   const rnd=mkTRnd(wx,wz,137);
-  const h=4+((rnd()*3)|0);
-  const ox=rnd()<0.5?-1:1,oz=rnd()<0.5?-1:1;
-  leafLayer(m,wx+ox,ty+h,  wz+oz,K.cherry_leaf,2,2,rnd);
-  leafLayer(m,wx+ox,ty+h+1,wz+oz,K.cherry_leaf,3,1,rnd);
-  leafLayer(m,wx+ox,ty+h+2,wz+oz,K.cherry_leaf,2,1,rnd);
-  trunk1(m,wx,ty,wz,K.cherry_log,h);
-  sb(m,wx+ox,ty+h,wz+oz,K.cherry_log);
-  if(K.pink_petals&&rnd()<0.5)sb(m,wx+ox,ty,wz+oz,K.pink_petals);
+  const LF=K.cherry_leaf,LG=K.cherry_log;
+  // Vanilla cherry: a short trunk that forks into 2-4 upward-angled branches,
+  // each capped by a rounded pink blossom blob; petals scatter on the ground.
+  const h=5+((rnd()*3)|0);                     // trunk 5..7
+  trunk1(m,wx,ty,wz,LG,h);
+  // Round blossom blob helper.
+  const blob=(bx,by,bz,r)=>{
+    for(let dx=-r;dx<=r;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-r;dz<=r;dz++){
+      if(dx*dx+dz*dz+dy*dy*2>r*r+1)continue;
+      if(Math.abs(dx)===r&&Math.abs(dz)===r&&rnd()<0.6)continue;
+      sb(m,bx+dx,by+dy,bz+dz,LF);
+    }
+  };
+  // central crown
+  blob(wx,ty+h,wz,2);
+  // forked branches
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]];
+  const nB=2+((rnd()*3)|0);                     // 2..4 branches
+  const used={};
+  for(let i=0;i<nB;i++){
+    let di=(rnd()*dirs.length)|0;
+    if(used[di]){di=(di+1)%dirs.length;}
+    used[di]=1;
+    const d=dirs[di];
+    const reach=2+((rnd()*2)|0);                // branch length 2..3
+    let bx=wx,bz=wz,by=ty+h-1-((rnd()*2)|0);
+    for(let step=1;step<=reach;step++){
+      bx+=d[0];bz+=d[1];by+=1;
+      sb(m,bx,by,bz,LG);
+    }
+    blob(bx,by+1,bz,2);
+  }
+  // ground petals
+  if(K.pink_petals)for(let i=0,n=2+((rnd()*3)|0);i<n;i++){
+    const px=wx+((rnd()*5)|0)-2,pz=wz+((rnd()*5)|0)-2;
+    sb(m,px,ty,pz,K.pink_petals);
+  }
 }
 function placePaleOak(m,wx,ty,wz){
   if(!K.pale_oak_log)return placeDarkOak(m,wx,ty,wz);
@@ -960,35 +1228,124 @@ function giantMushroom(m,wx,ty,wz){
 }
 
 // ── OCEAN FEATURES ─────────────────────────────────────────────
+// CORAL_COLORS maps index → {block, plant, fan} permutation triplet so we can
+// pick a consistent colour per column without multiple noise lookups.
+const CORAL_COLORS_KEY=['blue','pink','purple','red','yellow'];
+let _coralSets=null;
+function getCoralSet(i){
+  if(!_coralSets){
+    _coralSets=[];
+    for(const c of CORAL_COLORS_KEY)_coralSets.push({blk:K['coral_'+c],fan:K['coral_fan_'+c],plant:K['coral_plant_'+c]});
+  }
+  return _coralSets[i%5];
+}
 function placeOceanFeat(m,wx,ty,wz,bm){
-  if(bm!==0&&bm!==12)return;
   if(bm===12){
-    const ct=p2(wx*0.08+9000,wz*0.08)*P2N;
-    if(ct>0.70){const cbs=[K.coral_blue,K.coral_pink,K.coral_purple,K.coral_red,K.coral_yellow];const ci=Math.floor(Math.abs(ct*5))%5;if(cbs[ci])sb(m,wx,ty+1,wz,cbs[ci]);}
-    else if(ct>0.50&&K.coral_fan)sb(m,wx,ty+1,wz,K.coral_fan);
+    // Coral reef: column-level noise for reef zone density, separate noise for
+    // colour. Layers: sand base → coral block → coral fan / plant → sea pickle.
+    const reefN=p2(wx*0.04+9000,wz*0.04)*P2N;
+    if(reefN<0.25)return;                          // ~60 % of reef columns active
+    const dead=reefN<0.35;                         // outer fringe → dead coral
+    const ci=(Math.abs(p2(wx*0.13+19000,wz*0.13))*5)|0;
+    const cs=getCoralSet(ci);
+
+    // always sand directly under the formation
+    sb(m,wx,ty,wz,K.sand);
+
+    // base block: live or dead coral block
+    const baseBlk=(!dead&&cs.blk)?cs.blk:K.sand;
+    sb(m,wx,ty,wz,baseBlk);
+
+    // column height 0-2: some columns are just a flat fan
+    const colH=colRnd(wx,wz,611);
+    if(colH<0.50){
+      // short: coral fan or dead fan on top of the base
+      const fan=dead?K.dead_coral_fan:cs.fan;
+      if(fan)sb(m,wx,ty+1,wz,fan);
+    }else if(colH<0.80){
+      // medium: second coral block + fan
+      const blk2=(!dead&&cs.blk)?cs.blk:K.sand;
+      sb(m,wx,ty+1,wz,blk2);
+      const fan=dead?K.dead_coral_fan:cs.fan;
+      if(fan)sb(m,wx,ty+2,wz,fan);
+    }else{
+      // tall: two stacked coral blocks + plant + optional sea pickle
+      const blk2=(!dead&&cs.blk)?cs.blk:K.sand;
+      sb(m,wx,ty+1,wz,blk2);
+      const plant=dead?null:cs.plant;
+      if(plant)sb(m,wx,ty+2,wz,plant);
+      if(!dead&&K.sea_pickle&&colRnd(wx,wz,613)<0.25)sb(m,wx,ty+2,wz,K.sea_pickle);
+    }
+
+    // side fans on adjacent faces (2-4 sides) for the denser core patches
+    if(!dead&&reefN>0.55){
+      const sideFan=cs.fan;
+      if(sideFan){
+        const sides=[[1,0],[-1,0],[0,1],[0,-1]];
+        for(const[sx,sz] of sides){
+          if(colRnd(wx+sx*37,wz+sz*41,617)<0.55)
+            sb(m,wx+sx,ty+1,wz+sz,sideFan);
+        }
+      }
+    }
     return;
   }
-  if(ty>=SEA-3){
-    const sg=p2(wx*0.12+10000,wz*0.12)*P2N;
-    if(sg>0.65&&K.seagrass){sb(m,wx,ty+1,wz,K.seagrass);}
-    else if(sg<-0.60&&K.kelp&&ty<=SEA-5){
-      const kh=Math.floor(Math.abs(sg)*8);
-      for(let y=1;y<=Math.min(kh,SEA-ty-1);y++)sb(m,wx,ty+y,wz,K.kelp);
-    }
+
+  // Any submerged column (ocean, river, lake, swamp, mangrove): seagrass on the
+  // floor. Kelp forests only rise in open-ocean columns of sufficient depth.
+  if(ty>=SEA-1)return;
+  const sg=p2(wx*0.12+10000,wz*0.12)*P2N;
+  const rr=colRnd(wx,wz,711);
+  if(K.seagrass&&rr<0.25){
+    sb(m,wx,ty+1,wz,K.seagrass);
+  }else if(bm===0&&K.kelp&&ty<=SEA-5&&sg<-0.30){
+    const kh=Math.min(SEA-ty-2,3+Math.floor(Math.abs(sg)*16));
+    for(let y=1;y<=kh;y++)sb(m,wx,ty+y,wz,K.kelp);
   }
 }
 
 // ── SURFACE FLORA ──────────────────────────────────────────────
+// Every grassy biome gets a set of at least 3 flowers. Plains uses the full
+// palette at the base rate; all other grassy biomes spawn their themed set at
+// one third of the plains rate. Tall flowers (rose bush, peony, lilac,
+// sunflower) are placed as proper 2-block plants.
+let FLOWER_SETS=null,TALL_SET=null;
+function initFlowers(){
+  if(FLOWER_SETS)return;
+  const F=K;
+  const tulips=[F.red_tulip,F.orange_tulip,F.white_tulip,F.pink_tulip].filter(Boolean);
+  const tall=[F.rose_bush,F.peony,F.lilac,F.sunflower].filter(Boolean);
+  const ALL=[F.dandelion,F.poppy,F.allium,F.azure,F.cornfl,F.oxeye,F.lily_v,F.blue_orch,...tulips,...tall].filter(Boolean);
+  FLOWER_SETS={
+    2:[F.dandelion,F.poppy,F.azure].filter(Boolean),                                    // savanna
+    3:ALL,                                                                              // plains: every flower
+    4:[F.poppy,F.dandelion,F.rose_bush,F.peony,F.lilac,F.azure,F.oxeye,F.allium].filter(Boolean), // forest
+    5:[F.lily_v,F.dandelion,F.poppy,F.oxeye,F.cornfl].filter(Boolean),                  // birch
+    6:[F.dandelion,F.poppy,...tulips].filter(Boolean),                                  // jungle
+    8:[F.blue_orch,F.dandelion,F.poppy].filter(Boolean),                                // swamp
+    9:[F.poppy,F.dandelion,F.lily_v].filter(Boolean),                                   // taiga
+    11:[F.dandelion,F.poppy,F.cornfl,F.oxeye,F.allium].filter(Boolean),                 // mountain meadow
+    13:[F.lily_v,F.allium,F.oxeye].filter(Boolean),                                     // dark oak
+    14:[F.allium,F.pink_tulip,F.peony,F.lilac,F.dandelion].filter(Boolean),             // cherry
+    15:[F.lily_v,F.oxeye,F.dandelion].filter(Boolean),                                  // pale garden
+  };
+  TALL_SET=new Set(tall);
+}
 function placeFlora(m,wx,ty,wz,bm){
+  initFlowers();
   const r=colRnd(wx,wz,11),r2=colRnd(wx,wz,23);
+  const fset=FLOWER_SETS[bm];
+  if(fset&&fset.length&&!(bm===11&&ty>200)){
+    const rate=bm===3?0.05:0.0167;          // others = 1/3 of plains
+    if(r<rate){
+      const fl=fset[(r2*fset.length)|0];
+      if(fl){ if(TALL_SET.has(fl))placeTall(m,wx,ty+1,wz,fl); else sb(m,wx,ty+1,wz,fl); return; }
+    }
+  }
   switch(bm){
     case 1:if(r<0.04&&K.dead_bush)sb(m,wx,ty+1,wz,K.dead_bush);break;
     case 2:if(r<0.05&&K.dead_bush)sb(m,wx,ty+1,wz,K.dead_bush);else if(r<0.23&&K.t_grass)sb(m,wx,ty+1,wz,K.t_grass);break;
-    case 3:{
-      const fls=[K.dandelion,K.poppy,K.blue_orch,K.allium,K.azure,K.cornfl,K.oxeye,K.lily_v];
-      if(r<0.05){const fi=(r2*fls.length)|0;if(fls[fi])sb(m,wx,ty+1,wz,fls[fi]);}
-      else if(r<0.33&&K.t_grass)sb(m,wx,ty+1,wz,K.t_grass);
-    }break;
+    case 3:if(r<0.33&&K.t_grass)sb(m,wx,ty+1,wz,K.t_grass);break;
     case 4:if(r<0.25&&K.t_grass)sb(m,wx,ty+1,wz,K.t_grass);else if(r<0.33&&K.fern)sb(m,wx,ty+1,wz,K.fern);break;
     case 5:if(r<0.28&&K.t_grass)sb(m,wx,ty+1,wz,K.t_grass);break;
     case 6:if(r<0.25&&K.fern)sb(m,wx,ty+1,wz,K.fern);else if(r<0.33&&K.vine)sb(m,wx,ty+1,wz,K.vine);break;
@@ -1050,6 +1407,13 @@ function treeIsLocalMin(wx,wz,myRoll,maxT){
   }
   return true;
 }
+// True if this column's surface is beach sand (handled by fillCol's doBeach).
+// Deserts/badlands/savanna are excluded so their own flora still spawns.
+function isBeachSand(wx,wz,sy,bm){
+  if(bm===1||bm===2||bm===18)return false;
+  if(sy<=SEA+3){const bn=p2(wx*0.005+8000,wz*0.005);return bn>0.38;}
+  return false;
+}
 function* placeFeat(m,cx,cz,surfs,bms,tys){
   const x0=cx*16,z0=cz*16;
   for(let wx=x0;wx<x0+16;wx++){
@@ -1059,7 +1423,11 @@ function* placeFeat(m,cx,cz,surfs,bms,tys){
       if(sy<SEA){placeOceanFeat(m,wx,tys[si],wz,bm);continue;}
       const ty=tys[si];
 
-      if(bm!==0&&bm!==12)placeFlora(m,wx,ty,wz,bm);
+      // No trees or foliage on bare sand (beaches) unless it's a desert biome.
+      const sandy=isBeachSand(wx,wz,sy,bm);
+
+      if(bm!==0&&bm!==12&&!sandy)placeFlora(m,wx,ty,wz,bm);
+      if(sandy)continue;
 
       const tr=treeRoll(wx,wz);
       const grove=groveAt(wx,wz);
@@ -1178,7 +1546,7 @@ function* roomPrison(m,cx,wy,cz,ddx,ddz,hd,hw){
       else   sb(m,cx+p,wy+dy,cz+ddz*hd,K.iron_bars);
     }
   }
-  sb(m,cx,wy+1,cz,K.spawner);
+  placeSpawner(m,cx,wy+1,cz,"silverfish");
   placeChest(m,cx+(ddz*2||1),wy+1,cz+(ddx*2||0),"prison");
   yield;
 }
@@ -1277,7 +1645,9 @@ function* placeRoomSH(m,cx,wy,cz,type,ddx,ddz,hd,hw){
 // Each of the 4 cardinal directions grows a chain of up to 3 rooms joined by
 // corridors; some corridors slope down a level (real verticality). One
 // direction is GUARANTEED to host the 2-story library. Deterministic per seed.
+let _shLayout=null;
 function computeSHLayout(){
+  if(_shLayout)return _shLayout;
   let _sr=((perm[88]|(perm[166]<<8))>>>0)||1;
   const shR=()=>{_sr=(_sr*1664525+1013904223)>>>0;return _sr;};
   const shRd=()=>shR()/0x100000000;
@@ -1305,54 +1675,77 @@ function computeSHLayout(){
     const dist1=9+L1+r1.hd;
     tasks.push({type:rt1,cx:ddx*dist1,cz:ddz*dist1,ddx,ddz,hd:r1.hd,hw:r1.hw,wy});
 
-    // ── Level 2 (≈60% chance) ──
-    if(shRd()>0.40){
-      const slope=shRd()>0.5;
-      const L2=8+shRi(6);
-      const sx2=ddx*(dist1+r1.hd+1),sz2=ddz*(dist1+r1.hd+1);
-      tasks.push({type:'corridor',sx:sx2,sz:sz2,ddx,ddz,len:L2,wy,slope});
-      if(slope)wy-=(L2>>1);
-      const rt2=RTYPES[shRi(RTYPES.length)];
-      const r2=RDEF[rt2];
-      const dist2=dist1+r1.hd+1+L2+r2.hd;
-      tasks.push({type:rt2,cx:ddx*dist2,cz:ddz*dist2,ddx,ddz,hd:r2.hd,hw:r2.hw,wy});
-
-      // ── Level 3 (≈35% chance) ──
+    // ── Additional levels: a chain of rooms, each joined by a corridor that may
+    //    slope down a level (real multistory). Level 2 almost always, 3 common,
+    //    4 occasional. Some rooms sprout a perpendicular side-branch room, so the
+    //    stronghold grows into a larger multi-floor network.
+    let prevDist=dist1,prevHd=r1.hd;
+    const levelChance=[0.92,0.62,0.30];   // chance to extend to levels 2,3,4
+    for(let L=0;L<levelChance.length;L++){
+      if(shRd()>levelChance[L])break;
+      const slope=shRd()>0.40;            // slopes common → vertical spread
+      const clen=7+shRi(7);
+      const sxN=ddx*(prevDist+prevHd+1),szN=ddz*(prevDist+prevHd+1);
+      tasks.push({type:'corridor',sx:sxN,sz:szN,ddx,ddz,len:clen,wy,slope});
+      if(slope)wy-=(clen>>1);
+      const rtN=(L===0&&di!==libDir&&shRd()>0.7)?'library':RTYPES[shRi(RTYPES.length)];
+      const rN=RDEF[rtN];
+      const distN=prevDist+prevHd+1+clen+rN.hd;
+      tasks.push({type:rtN,cx:ddx*distN,cz:ddz*distN,ddx,ddz,hd:rN.hd,hw:rN.hw,wy});
+      // perpendicular side-branch room
       if(shRd()>0.55){
-        const slope3=shRd()>0.5;
-        const L3=7+shRi(5);
-        const sx3=ddx*(dist2+r2.hd+1),sz3=ddz*(dist2+r2.hd+1);
-        tasks.push({type:'corridor',sx:sx3,sz:sz3,ddx,ddz,len:L3,wy,slope:slope3});
-        if(slope3)wy-=(L3>>1);
-        const rt3=RTYPES[shRi(RTYPES.length)];
-        const r3=RDEF[rt3];
-        const dist3=dist2+r2.hd+1+L3+r3.hd;
-        tasks.push({type:rt3,cx:ddx*dist3,cz:ddz*dist3,ddx,ddz,hd:r3.hd,hw:r3.hw,wy});
+        const perp=DIRS[(di+(shRd()>0.5?1:3))%4];
+        const pdx=perp[0],pdz=perp[1];
+        const bl=6+shRi(5);
+        const bsx=ddx*distN+pdx*(rN.hw+1),bsz=ddz*distN+pdz*(rN.hw+1);
+        tasks.push({type:'corridor',sx:bsx,sz:bsz,ddx:pdx,ddz:pdz,len:bl,wy});
+        const rtB=RTYPES[shRi(RTYPES.length)];
+        const rB=RDEF[rtB];
+        const bdist=(rN.hw+1)+bl+rB.hd;
+        tasks.push({type:rtB,cx:ddx*distN+pdx*bdist,cz:ddz*distN+pdz*bdist,ddx:pdx,ddz:pdz,hd:rB.hd,hw:rB.hw,wy});
       }
+      prevDist=distN;prevHd=rN.hd;
     }
   }
+  _shLayout=tasks;
   return tasks;
 }
 
 // ── STRONGHOLD PIECE (each chunk within range contributes its parts) ──
 function* placeStrongholdPiece(m,cx,cz){
-  if(Math.abs(cx)>9||Math.abs(cz)>9)return; // wider radius for the larger build
+  if(Math.abs(cx)>11||Math.abs(cz)>11)return; // wider radius for the larger build
   if(SHY<WMIN)return;
   const layout=computeSHLayout();
 
   // Portal room + entrance shaft: chunk (0,0) only — enlarged 17×17 hall
   if(cx===0&&cz===0){
     yield* shHollow(m,SHX-8,SHY,SHZ-8,SHX+8,SHY+9,SHZ+8);
-    const epf=K.end_frame||K.obsidian;
+    const epfBase=K.end_frame||K.obsidian;
+    // Helper: returns a frame permutation facing toward the portal center.
+    // Bedrock "minecraft:cardinal_direction" on end_portal_frame is the direction
+    // the frame FACES (toward center). Frames at fz==-2 face south, fz==+2 face
+    // north, fx==-2 face east, fx==+2 face west.
+    function mkEPF(fx,fz){
+      if(!K.end_frame)return K.obsidian;
+      try{
+        // Determine which edge this frame is on: fz==±2 is the N/S edge,
+        // fx==±2 is the E/W edge. Check |fz|==2 first to avoid ambiguity
+        // (all corner slots have exactly one axis at ±2).
+        let dir;
+        if(Math.abs(fz)===2) dir=fz<0?"south":"north";
+        else                  dir=fx<0?"east":"west";
+        return B.resolve("minecraft:end_portal_frame").withState("minecraft:cardinal_direction",dir);
+      }catch{return epfBase;}
+    }
     // 12-frame end portal ring
     for(const[fx,fz] of [[-1,-2],[0,-2],[1,-2],[-1,2],[0,2],[1,2],
                           [-2,-1],[-2,0],[-2,1],[2,-1],[2,0],[2,1]])
-      sb(m,SHX+fx,SHY+1,SHZ+fz,epf);
+      sb(m,SHX+fx,SHY+1,SHZ+fz,mkEPF(fx,fz));
     // raised platform around the portal
     for(let x=SHX-3;x<=SHX+3;x++)for(let z=SHZ-3;z<=SHZ+3;z++)sb(m,x,SHY,z,K.s_brick||K.stone);
     for(let x=SHX-1;x<=SHX+1;x++)for(let z=SHZ-1;z<=SHZ+1;z++)sb(m,x,SHY,z,K.lava); // central lava well below frame
     // silverfish spawner in a corner (not inside the ring)
-    sb(m,SHX+6,SHY+1,SHZ+6,K.spawner);
+    placeSpawner(m,SHX+6,SHY+1,SHZ+6,"silverfish");
     // a library-tier chest guarding the portal
     placeChest(m,SHX-6,SHY+1,SHZ-6,"treasury");
     if(K.lantern)for(const[ox,oz] of [[-7,-7],[7,-7],[-7,7],[7,7]])sb(m,SHX+ox,SHY+8,SHZ+oz,K.lantern);
@@ -1409,7 +1802,7 @@ function* complexDungeonAt(m,wx,wz,sy){
   const ry=Math.min(sy-25,20);if(ry<=DS_TOP+15)return;
   // central hall
   yield* dungeonRoom(m,wx,ry,wz,7,7);
-  sb(m,wx,ry+1,wz,K.spawner);
+  placeSpawner(m,wx,ry+1,wz,dungeonMob(wx,wz));
   for(let i=0;i<4;i++){const a=i*Math.PI/2;placeChest(m,wx+Math.round(Math.cos(a)*4),ry+1,wz+Math.round(Math.sin(a)*4),"dungeon");}
   if(K.cobweb)for(const[ox,oz] of [[-6,-6],[6,6],[-6,6],[6,-6]])sb(m,wx+ox,ry+4,wz+oz,K.cobweb);
   // side chambers
@@ -1432,10 +1825,31 @@ function* complexDungeonAt(m,wx,wz,sy){
     }
     yield;
     yield* dungeonRoom(m,scx,ry,scz,4,4);
-    if(rnd()<0.7)sb(m,scx,ry+1,scz,K.spawner);
+    if(rnd()<0.7)placeSpawner(m,scx,ry+1,scz,dungeonMob(scx,scz));
     placeChest(m,scx+1,ry+1,scz,"dungeon");
     if(rnd()<0.5)placeChest(m,scx-1,ry+1,scz,"storage");
     yield;
+  }
+  // ── LOWER LEVEL (multistory) — a basement chamber beneath the hall with its
+  //    own spawner and loot, linked by a ladder shaft. Makes the dungeon span
+  //    two floors.
+  if(rnd()<0.85){
+    const by=ry-7;
+    if(by>DS_TOP+6){
+      yield* dungeonRoom(m,wx,by,wz,6,6);
+      placeSpawner(m,wx,by+1,wz,dungeonMob(wx+7,wz+7));
+      for(const[ox,oz] of [[-4,-4],[4,4],[-4,4],[4,-4]])
+        placeChest(m,wx+ox,by+1,wz+oz,rnd()<0.5?"dungeon":"treasury");
+      if(K.cobweb)for(const[ox,oz] of [[-5,0],[5,0],[0,-5],[0,5]])sb(m,wx+ox,by+4,wz+oz,K.cobweb);
+      // ladder shaft from the hall floor down into the basement
+      const sxp=wx+5,szp=wz+5;
+      for(let y=by+1;y<=ry;y++){
+        sb(m,sxp+1,y,szp,K.cobble||K.stone);sb(m,sxp-1,y,szp,K.cobble||K.stone);
+        sb(m,sxp,y,szp+1,K.cobble||K.stone);sb(m,sxp,y,szp-1,K.cobble||K.stone);
+        if(K.ladder)try{sb(m,sxp,y,szp,K.ladder);}catch{}else sb(m,sxp,y,szp,K.air);
+      }
+      yield;
+    }
   }
 }
 
@@ -1536,9 +1950,10 @@ function* shipwreckAt(m,wx,wz,sy){
   for(let y=hy+5;y<=hy+12;y++)sb(m,wx,y,wz,LG);
   for(let z=wz-3;z<=wz+3;z++)sb(m,wx,hy+10,wz+(z-wz),LG);
   yield;
-  // 3 chests
+  // 3 chests — treasure chest has a 50% chance to hold a Heart of the Sea
+  const heart=colRnd(wx,wz,909)<0.5;
   placeChest(m,wx-5,hy+1,wz,"shipwreck_supply");
-  placeChest(m,wx,hy+1,wz,"shipwreck_treasure");
+  placeChest(m,wx,hy+1,wz,"shipwreck_treasure",heart?[{id:"minecraft:heart_of_the_sea",count:1}]:null);
   placeChest(m,wx+5,hy+6,wz,"shipwreck_map");
   yield;
 }
@@ -1549,15 +1964,237 @@ function* geodeGen(m,wx,wz,ry){
   if(!K.amethyst||!K.s_basalt)return;
   if(ry<=WMIN+6||ry>=WMAX-6)return;
   const rad=5+(Math.abs(p2(wx*0.1,wz*0.1))*2|0)%3;
+  // Embed check: a geode must sit in rock, not float in an open cave. Sample the
+  // centre + axis points; require most to be solid (not carved cave) and below
+  // the surface, so the geode is at least partially embedded in a wall.
+  let solid=0;
+  for(const[dx,dy,dz] of [[0,0,0],[rad,0,0],[-rad,0,0],[0,rad,0],[0,-rad,0],[0,0,rad],[0,0,-rad]]){
+    if(!caveAt(wx+dx,ry+dy,wz+dz)&&ry+dy<surfYM(wx+dx,wz+dz)-1)solid++;
+  }
+  if(solid<3)return;                       // too exposed → would float; skip
+  const CL=K.am_cluster;
   for(let dx=-rad-2;dx<=rad+2;dx++){
     for(let dy=-rad-2;dy<=rad+2;dy++)for(let dz=-rad-2;dz<=rad+2;dz++){
       const dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
       if     (dist<=rad-2)sb(m,wx+dx,ry+dy,wz+dz,K.air);
-      else if(dist<=rad-1)sb(m,wx+dx,ry+dy,wz+dz,Math.abs(p3(wx+dx,ry+dy,wz+dz))>0.5?K.bud_amethyst||K.amethyst:K.amethyst);
+      else if(dist<=rad-1){
+        // inner amethyst shell with budding amethyst + inward clusters
+        const isBud=Math.abs(p3(wx+dx,ry+dy,wz+dz))>0.55;
+        sb(m,wx+dx,ry+dy,wz+dz,isBud?(K.bud_amethyst||K.amethyst):K.amethyst);
+        if(isBud&&CL&&Math.abs(p3((wx+dx)*0.7,(ry+dy)*0.7,(wz+dz)*0.7))>0.6){
+          const ix=dx>0?-1:dx<0?1:0,iy=dy>0?-1:dy<0?1:0,iz=dz>0?-1:dz<0?1:0;
+          sb(m,wx+dx+ix,ry+dy+iy,wz+dz+iz,CL);  // cluster grows inward
+        }
+      }
       else if(dist<=rad  )sb(m,wx+dx,ry+dy,wz+dz,K.calcite);
       else if(dist<=rad+1)sb(m,wx+dx,ry+dy,wz+dz,K.s_basalt);
     }
     yield;
+  }
+}
+
+// ── CAVE FEATURES (deferred → placed in the structure phase so the parts that
+// spill into neighbouring chunks land on terrain that already exists and are
+// NOT overwritten). All bounds-guarded by sb(); spill stays < 1 chunk.
+// Find the highest cave floor (solid with air above) in [yBot,yTop] at x,z.
+function findCaveFloor(x,z,yTop,yBot){
+  let prevAir=false;
+  for(let y=yTop;y>=yBot;y--){
+    const air=caveAt(x,y,z);
+    if(prevAir&&!air)return y;   // solid here, air above → floor
+    prevAir=air;
+  }
+  return null;
+}
+// Paint a cave-decoration block 2-3 blocks INTO the surrounding walls/floor/
+// ceiling around an anchor. Uses caveAt() (cheap noise) to tell air from solid,
+// stamping outward from each nearby cave-air cell so the decoration penetrates
+// the rock rather than only coating the exposed face.
+const _PCS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+function paintCaveShell(m,x,y,z,block,depth){
+  if(!block)return;
+  const R=3;
+  for(let dx=-R;dx<=R;dx++)for(let dy=-R;dy<=R;dy++)for(let dz=-R;dz<=R;dz++){
+    const ax=x+dx,ay=y+dy,az=z+dz;
+    if(!caveAt(ax,ay,az))continue;                 // start only from cave air
+    for(const[ux,uy,uz] of _PCS){
+      for(let t=1;t<=depth;t++){
+        const sx=ax+ux*t,sy=ay+uy*t,sz=az+uz*t;
+        if(sy<=WMIN+1)break;
+        if(caveAt(sx,sy,sz))break;                 // reached more air → stop
+        sb(m,sx,sy,sz,block);
+      }
+    }
+  }
+}
+// VANILLA-STYLE LUSH SPOT: mossy floor (penetrating into walls), moss carpet,
+// azalea bushes, big + small dripleaf, a clay-rimmed water puddle, and ceiling
+// features (spore blossom, glow berries / cave vines, hanging roots, glow lichen).
+function decorateLushSpot(m,x,fy,z){
+  const M=K.moss||K.mycelium;
+  paintCaveShell(m,x,fy,z,M,2+((colRnd(x,z,560)*2)|0));   // moss 2-3 blocks into walls
+  // ceiling height
+  let ceil=null;
+  for(let h=2;h<=14;h++){if(!caveAt(x,fy+h,z)){ceil=fy+h-1;break;}}
+  // floor carpet + plants
+  for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+    if(dx*dx+dz*dz>5)continue;
+    const fx=x+dx,fz=z+dz;
+    if(caveAt(fx,fy,fz)||!caveAt(fx,fy+1,fz))continue;     // need solid floor, air above
+    sb(m,fx,fy,fz,M);
+    const r=colRnd(fx,fz,581);
+    if(r<0.16&&K.azalea)sb(m,fx,fy+1,fz,(colRnd(fx,fz,582)<0.4&&K.flow_azalea)?K.flow_azalea:K.azalea);
+    else if(r<0.30&&K.small_drip)placeTall(m,fx,fy+1,fz,K.small_drip);
+    else if(r<0.62&&K.moss_carpet)sb(m,fx,fy+1,fz,K.moss_carpet);
+  }
+  // clay-rimmed water puddle with a big dripleaf rising from it
+  if(K.clay&&K.water){
+    sb(m,x,fy,z,K.water);
+    for(const[dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])
+      if(!caveAt(x+dx,fy,z+dz))sb(m,x+dx,fy,z+dz,K.clay);
+    if(K.big_drip&&colRnd(x,z,584)<0.6){
+      sb(m,x+1,fy,z,K.clay);
+      sb(m,x+1,fy+1,z,K.big_drip_stem||K.big_drip);
+      sb(m,x+1,fy+2,z,K.big_drip);
+    }
+  }
+  // ceiling features
+  if(ceil!=null){
+    if(K.spore&&colRnd(x,z,583)<0.5)sb(m,x,ceil,z,K.spore);
+    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+      if(dx*dx+dz*dz>5)continue;
+      const cxp=x+dx,czp=z+dz;
+      if(caveAt(cxp,ceil+1,czp)||!caveAt(cxp,ceil,czp))continue; // solid ceiling, air below
+      const r=colRnd(cxp,czp,585);
+      if(r<0.26&&K.cave_vine){
+        const len=1+((colRnd(cxp,czp,586)*3)|0);
+        for(let v=0;v<len&&caveAt(cxp,ceil-v,czp);v++)
+          sb(m,cxp,ceil-v,czp,(K.cave_vine_berry&&colRnd(cxp+v,czp,587)<0.4)?K.cave_vine_berry:K.cave_vine);
+      }else if(r<0.46&&K.hanging_roots)sb(m,cxp,ceil,czp,K.hanging_roots);
+      else if(r<0.62&&K.glow_lichen)sb(m,cxp,ceil,czp,K.glow_lichen);
+    }
+  }
+}
+// DEEP-DARK sculk spot: sculk-coated floor/walls (penetrating), with sculk
+// sensors, shriekers (can_summon), a catalyst, and floor veins. A shrieker +
+// sensor are guaranteed at the centre so every sculk pocket is "live".
+function decorateSculkSpot(m,x,fy,z){
+  const S=K.sculk;if(!S)return;
+  paintCaveShell(m,x,fy,z,S,2+((colRnd(x,z,620)*2)|0));   // sculk 2-3 blocks into walls
+  for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+    if(dx*dx+dz*dz>5)continue;
+    const fx=x+dx,fz=z+dz;
+    if(caveAt(fx,fy,fz)||!caveAt(fx,fy+1,fz))continue;     // need solid floor, air above
+    sb(m,fx,fy,fz,S);
+    const r=colRnd(fx,fz,621);
+    if(r<0.10&&K.sculk_shrieker)sb(m,fx,fy+1,fz,K.sculk_shrieker);
+    else if(r<0.26&&K.sculk_sensor)sb(m,fx,fy+1,fz,K.sculk_sensor);
+    else if(r<0.33&&K.sculk_catalyst)sb(m,fx,fy+1,fz,K.sculk_catalyst);
+    else if(r<0.45&&K.sculk_vein)sb(m,fx,fy+1,fz,K.sculk_vein);
+  }
+  // guaranteed centre features so the pocket always has a working sensor/shrieker
+  if(K.sculk_shrieker)sb(m,x,fy+1,z,K.sculk_shrieker);
+  if(K.sculk_sensor&&!caveAt(x+1,fy,z)&&caveAt(x+1,fy+1,z))sb(m,x+1,fy+1,z,K.sculk_sensor);
+  if(K.sculk_catalyst&&!caveAt(x-1,fy,z)&&caveAt(x-1,fy+1,z))sb(m,x-1,fy+1,z,K.sculk_catalyst);
+}
+// BIG cave mushroom with VARIETY: 0 upright-tall, 1 wide-flat, 2 sideways,
+// 3 diagonal. Bigger horizontally & vertically than vanilla huge mushrooms.
+function bigMushroom(m,wx,ty,wz,variant,brown){
+  const cap=brown?K.brn_mush_blk:K.red_mush_blk;
+  if(!cap)return;
+  const stem=K.mush_stem||cap;
+  if(variant===1){                                  // WIDE FLAT
+    const h=3+((colRnd(wx,wz,521)*2)|0);
+    for(let y=0;y<h;y++)sb(m,wx,ty+y,wz,stem);
+    const R=3;
+    for(let dx=-R;dx<=R;dx++)for(let dz=-R;dz<=R;dz++)
+      if(dx*dx+dz*dz<=R*R+1)sb(m,wx+dx,ty+h,wz+dz,cap);
+  }else if(variant===2){                            // SIDEWAYS
+    const len=3+((colRnd(wx,wz,523)*3)|0);
+    const d=(colRnd(wx,wz,525)*4)|0;
+    const dx=[1,-1,0,0][d],dz=[0,0,1,-1][d];
+    sb(m,wx,ty,wz,stem);sb(m,wx,ty+1,wz,stem);
+    for(let i=0;i<=len;i++)sb(m,wx+dx*i,ty+2,wz+dz*i,stem);
+    const ex=wx+dx*len,ez=wz+dz*len;
+    for(let ddx=-1;ddx<=1;ddx++)for(let ddz=-1;ddz<=1;ddz++){
+      sb(m,ex+ddx,ty+2,ez+ddz,cap);sb(m,ex+ddx,ty+3,ez+ddz,cap);
+    }
+  }else if(variant===3){                            // DIAGONAL
+    const steps=4+((colRnd(wx,wz,527)*3)|0);
+    const dx=colRnd(wx,wz,529)<0.5?1:-1,dz=colRnd(wx,wz,531)<0.5?1:-1;
+    let cxp=wx,czp=wz;
+    for(let i=0;i<steps;i++){sb(m,cxp,ty+i,czp,stem);cxp+=dx;czp+=dz;}
+    for(let ddx=-2;ddx<=2;ddx++)for(let ddz=-2;ddz<=2;ddz++)
+      if(!(Math.abs(ddx)===2&&Math.abs(ddz)===2))sb(m,cxp+ddx,ty+steps,czp+ddz,cap);
+  }else{                                            // UPRIGHT TALL
+    const h=6+((colRnd(wx,wz,533)*5)|0);            // 6..10 tall
+    for(let y=0;y<h;y++)sb(m,wx,ty+y,wz,stem);
+    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+      if(Math.abs(dx)===2&&Math.abs(dz)===2)continue;
+      sb(m,wx+dx,ty+h,wz+dz,cap);sb(m,wx+dx,ty+h+1,wz+dz,cap);
+    }
+    sb(m,wx,ty+h+2,wz,cap);
+  }
+}
+// Deferred cave-decoration pass: builds lush-cave features and big mushrooms on
+// cave floors of the matching region, penetrates the decoration into the walls,
+// and seeds axolotls into lush cave water. Generator → watchdog-safe.
+function* caveDecorate(m,cx,cz,surfs,bms){
+  const x0=cx*16,z0=cz*16,ci=8*16+8;
+  const yTopBase=Math.min(surfs[ci]-6,45);
+  const yBot=Math.max(WMIN+6,-180);
+  let anyLush=false;
+  for(let i=0;i<6;i++){
+    const ox=2+((colRnd(cx,cz,540+i)*12)|0);
+    const oz=2+((colRnd(cz,cx,560+i)*12)|0);
+    const x=x0+ox,z=z0+oz;
+    const yTop=Math.min(yTopBase,(surfs[ox*16+oz]||yTopBase)-6);
+    if(yTop>yBot){
+      const fy=findCaveFloor(x,z,yTop,yBot);
+      if(fy!=null&&fy>WMIN+4&&caveAt(x,fy+1,z)&&caveAt(x,fy+2,z)){
+        const cb=p3(x*0.006+25000,fy*0.006,z*0.006);
+        if(cb<-0.50){                                   // LUSH cave (was amethyst)
+          decorateLushSpot(m,x,fy,z);
+          anyLush=true;
+        }else if(cb>0.45){                              // MUSHROOM cave
+          paintCaveShell(m,x,fy,z,K.mycelium,2);
+          bigMushroom(m,x,fy+1,z,(colRnd(x,z,573)*4)|0,colRnd(x,z,575)>0.4);
+        }
+      }
+    }
+    yield;
+  }
+  // Axolotls: spawn into any cave water near a lush spot we just decorated.
+  if(anyLush){
+    try{
+      const wx=x0+8,wz=z0+8;let found=null;
+      const yhi=Math.min(surfs[ci]-3,SEA-1),ylo=Math.max(WMIN+4,-70);
+      for(let y=yhi;y>=ylo;y--){
+        const b=m.getBlock({x:wx,y,z:wz});
+        if(b&&b.typeId==="minecraft:water"){found=y;break;}
+      }
+      if(found!=null&&colRnd(cx,cz,577)<0.7){
+        const n=1+((colRnd(cx,cz,579)*3)|0);
+        for(let i=0;i<n;i++)try{m.spawnEntity("minecraft:axolotl",{x:wx+0.5,y:found,z:wz+0.5});}catch{}
+      }
+    }catch{}
+    yield;
+  }
+  // DEEP DARK pass: decorate sculk pockets (sensors + shriekers) on cave floors
+  // at DEEPDARK_TOP and below, where the deep-dark region noise passes.
+  if(K.sculk&&WMIN<=DEEPDARK_TOP-10){
+    const dBot=Math.max(WMIN+6,-500);
+    for(let i=0;i<4;i++){
+      const ox=2+((colRnd(cx,cz,640+i)*12)|0);
+      const oz=2+((colRnd(cz,cx,660+i)*12)|0);
+      const x=x0+ox,z=z0+oz;
+      const fy=findCaveFloor(x,z,DEEPDARK_TOP-2,dBot);
+      if(fy!=null&&fy<=DEEPDARK_TOP&&fy>WMIN+4&&caveAt(x,fy+1,z)&&caveAt(x,fy+2,z)
+         &&p2(x*0.004+33000,z*0.004)*P2N>-0.05){
+        decorateSculkSpot(m,x,fy,z);
+      }
+      yield;
+    }
   }
 }
 
@@ -1767,13 +2404,36 @@ function* placeVillage(m,cx,cz){
 }
 
 // ── PASSIVE MOBS ───────────────────────────────────────────────
-// Biome → passive pool ("minecraft:" prefix added automatically).
+// Biome → passive pool ("minecraft:" prefix added automatically). Pools list
+// the passive/neutral mobs that naturally belong to each biome — NO hostiles.
+// "axolotl" appears in lush biomes but is only ever placed into water (see the
+// spawn loops); on dry ground it is skipped.
 const PASSIVES={
-  1:["rabbit"],2:["cow","sheep","horse"],3:["cow","sheep","pig","chicken","horse"],
-  4:["sheep","pig","chicken","wolf"],5:["sheep","chicken"],6:["chicken","parrot","ocelot"],
-  7:["frog"],8:["frog","chicken"],9:["sheep","rabbit","wolf","fox"],10:["rabbit","fox","polar_bear"],
-  11:["goat"],13:["sheep","wolf"],14:["sheep","pig"],15:["rabbit"],17:["mooshroom"],18:["rabbit"],
+  1:["rabbit","camel"],
+  2:["cow","sheep","horse","donkey","chicken"],
+  3:["cow","sheep","pig","chicken","horse","donkey"],
+  4:["cow","sheep","pig","chicken","wolf","rabbit","axolotl"],
+  5:["cow","sheep","pig","chicken","rabbit","axolotl"],
+  6:["chicken","parrot","ocelot","panda","axolotl"],
+  7:["frog","chicken"],
+  8:["frog","chicken"],
+  9:["sheep","pig","chicken","rabbit","wolf","fox"],
+  10:["rabbit","fox","polar_bear"],
+  11:["goat","llama","sheep"],
+  13:["wolf","sheep","pig","chicken","rabbit"],
+  14:["pig","sheep","rabbit","axolotl"],
+  15:["rabbit"],
+  17:["mooshroom"],
+  18:["rabbit"],
 };
+const isAxolotl=k=>k.indexOf("axolotl")>=0;
+// Find a water block at/below (x, yhi) within range; returns its Y or null.
+function findWaterColumn(m,x,z,yhi,ylo){
+  for(let y=yhi;y>=ylo;y--){
+    try{const b=m.getBlock({x,y,z});if(b&&b.typeId==="minecraft:water")return y;}catch{}
+  }
+  return null;
+}
 function spawnPassives(m,cx,cz,surfs,bms){
   try{
     const si=8*16+8,sy=surfs[si],bm=bms[si];
@@ -1781,19 +2441,21 @@ function spawnPassives(m,cx,cz,surfs,bms){
     const pool=PASSIVES[bm];
     if(!pool)return;
     if(bm!==17&&colRnd(cx,cz,55)>0.30)return;
-    const kind="minecraft:"+pool[(colRnd(cx,cz,61)*pool.length)|0];
+    const kind=pool[(colRnd(cx,cz,61)*pool.length)|0];
+    if(isAxolotl(kind))return; // axolotls handled by the lush cave-water pass
+    const id="minecraft:"+kind;
     const n=2+((colRnd(cx,cz,67)*3)|0);
     for(let i=0;i<n;i++){
       const ox=4+((colRnd(cx+i,cz,71)*8)|0),oz=4+((colRnd(cx,cz+i,73)*8)|0);
       const s2=surfs[ox*16+oz];
-      if(s2>=SEA)try{m.spawnEntity(kind,{x:cx*16+ox,y:s2+2,z:cz*16+oz});}catch{}
+      if(s2>=SEA)try{m.spawnEntity(id,{x:cx*16+ox,y:s2+2,z:cz*16+oz});}catch{}
     }
   }catch{}
 }
 
 // ── PLACE STRUCTURES (registry-driven generator) ───────────────
 function* placeStructures(m,cx,cz,surfs,bms){
-  if(Math.abs(cx)<=9&&Math.abs(cz)<=9){
+  if(Math.abs(cx)<=11&&Math.abs(cz)<=11){
     try{yield* placeStrongholdPiece(m,cx,cz);}catch{}
   }
   if(cx===0&&cz===0){
@@ -1835,29 +2497,98 @@ function* placeStructures(m,cx,cz,surfs,bms){
 
   spawnPassives(m,cx,cz,surfs,bms);
   yield;
+  try{yield* caveDecorate(m,cx,cz,surfs,bms);}catch{}
   yield* placeVillage(m,cx,cz);
 }
 
 // ── JOB SYSTEM ────────────────────────────────────────────────
-const done=new Set(),pend=new Set(),que=[];
+// Strictly sequential, player-driven chunk loader.
+//   • Only ONE chunk job is ever in flight; the loader never starts another
+//     chunk until the current one has completely finished.
+//   • When idle it re-picks by priority:
+//       1. Finish structures for a terrain-complete chunk whose 8 neighbours all
+//          have terrain (so cross-border structure blocks land on real terrain
+//          and are never overwritten by a later column fill).
+//       2. Else load the UNBUILT chunk nearest a player that is cardinally
+//          adjacent to an already-built chunk (flood-fill outward growth).
+//       3. Else, if nothing around the player is built yet, load the chunk the
+//          player is standing in first, then grow outward from there.
+// "Built" is read from the completion sets first; when they are silent the
+// centre column is sampled — a chunk that is only air, or only air + flowing
+// water, across the height range counts as unbuilt.
+const FULL=new Set();           // chunks fully complete (terrain+structures); persisted
+const TERRAIN=new Set();        // chunks whose terrain (phase 0) is complete
+const STRUCT_PENDING=new Set(); // terrain done, structures still owed
+const PROBE_BUILT=new Set();    // probe-confirmed built (built stays built)
+const PROBE_EMPTY=new Set();    // probe-confirmed empty (cleared once we build it)
+const _structWait=new Map();    // chunk → number of times its structure phase was deferred
 let run=false;
 const ck=(cx,cz)=>`${cx},${cz}`;
 
-let seeded=false;
 function isDone(key){
-  if(done.has(key)){seeded=true;return true;}
-  try{if(w.getDynamicProperty("wgD_"+key)){done.add(key);seeded=true;return true;}}catch{}
+  if(FULL.has(key))return true;
+  try{if(w.getDynamicProperty("wgD_"+key)){FULL.add(key);return true;}}catch{}
   return false;
 }
 function markDone(key){
-  done.add(key);seeded=true;
+  FULL.add(key);
   try{w.setDynamicProperty("wgD_"+key,true);}catch{}
 }
-function hasDoneNeighbor(cx,cz){
-  return isDone(ck(cx+1,cz))||isDone(ck(cx-1,cz))||isDone(ck(cx,cz+1))||isDone(ck(cx,cz-1));
+
+// "Is this chunk generated?" probe. The sets answer instantly; otherwise sample
+// the centre column — first at the expected surface (one read for ordinary
+// land/ocean terrain), then coarsely across the full height as a fallback. A
+// column that is only air / flowing-water everywhere sampled is treated as
+// unbuilt; any solid or source-liquid block means it has been generated.
+const PROBE_LO=-512,PROBE_HI=512,PROBE_STRIDE=64;
+const _notEmpty=t=>!!t&&t!=="minecraft:air"&&t!=="minecraft:flowing_water";
+function _columnHasSolid(m,bx,bz){
+  try{
+    const sy=surfYM(bx,bz);
+    for(let i=0;i<3;i++){
+      const y=sy-(i===0?0:i===1?1:4);
+      if(y<PROBE_LO||y>PROBE_HI)continue;
+      const b=m.getBlock({x:bx,y,z:bz});
+      if(b&&_notEmpty(b.typeId))return true;
+    }
+    for(let y=PROBE_HI;y>=PROBE_LO;y-=PROBE_STRIDE){
+      const b=m.getBlock({x:bx,y,z:bz});
+      if(b&&_notEmpty(b.typeId))return true;
+    }
+  }catch{return false;}   // unloaded / unreadable → treat as not built
+  return false;
+}
+function chunkBuilt(m,cx,cz){
+  const k=ck(cx,cz);
+  if(FULL.has(k)||TERRAIN.has(k)||PROBE_BUILT.has(k))return true;
+  if(PROBE_EMPTY.has(k))return false;
+  if(isDone(k)){TERRAIN.add(k);return true;}
+  if(_columnHasSolid(m,cx*16+8,cz*16+8)){PROBE_BUILT.add(k);return true;}
+  PROBE_EMPTY.add(k);return false;
+}
+function chunkLoaded(m,cx,cz){
+  try{
+    const py=Math.max(WMIN,Math.min(0,WMAX));
+    return !!m.getBlock({x:cx*16+8,y:py,z:cz*16+8});
+  }catch{return false;}
+}
+function adjacentToBuilt(m,cx,cz){
+  return chunkBuilt(m,cx+1,cz)||chunkBuilt(m,cx-1,cz)||chunkBuilt(m,cx,cz+1)||chunkBuilt(m,cx,cz-1);
+}
+function allNeighborsBuilt(m,cx,cz){
+  return chunkBuilt(m,cx+1,cz)&&chunkBuilt(m,cx-1,cz)&&chunkBuilt(m,cx,cz+1)&&chunkBuilt(m,cx,cz-1)
+       &&chunkBuilt(m,cx+1,cz+1)&&chunkBuilt(m,cx-1,cz+1)&&chunkBuilt(m,cx+1,cz-1)&&chunkBuilt(m,cx-1,cz-1);
 }
 
-function* genJob(cx,cz){
+// Two-phase generation:
+//   phase 0 = terrain (bedrock, columns, ore veins, surface features)
+//   phase 1 = structures (dungeons, strongholds, shipwrecks, geodes, cave
+//             features, villages, mob seeding) — deferred until every one of
+//             the 8 neighbouring chunks has finished its terrain phase, so any
+//             structure blocks that spill across a chunk border land on terrain
+//             that already exists and are never overwritten by a later column
+//             fill. All structure builders are generators (yield) → watchdog-safe.
+function* genJob(cx,cz,phase){
   if(!resolveBlocks()||!K)return;
   initNoise();
   const m=dim();
@@ -1879,6 +2610,13 @@ function* genJob(cx,cz){
   }
   yield;
 
+  if(phase===1){
+    // Terrain (this chunk + all neighbours) already exists → safe to stamp
+    // structures that cross chunk borders.
+    try{yield* placeStructures(m,cx,cz,surfs,bms);}catch{}
+    return;
+  }
+
   const pre=yield* prefillChunk(m,x0,z0,maxS,allOcean);
 
   let i=0;
@@ -1892,112 +2630,115 @@ function* genJob(cx,cz){
 
   try{yield* placeVeins(m,cx,cz,surfs,bms);}catch{}
   try{yield* placeFeat(m,cx,cz,surfs,bms,tys);}catch{}
-  try{yield* placeStructures(m,cx,cz,surfs,bms);}catch{}
+  // structures intentionally deferred to phase 1
 }
 
-// ── SCHEDULER (time-budgeted, every tick) ─────────────────────
-let _currentJob=null,_jobCx=0,_jobCz=0,_jobFail0=0;
-function chunkLoaded(m,cx,cz){
-  try{
-    const py=Math.max(WMIN,Math.min(0,WMAX));
-    return !!m.getBlock({x:cx*16+8,y:py,z:cz*16+8});
-  }catch{return false;}
-}
-function requeueHead(){
-  const head=que.shift();
-  if(!head)return;
-  head.tries=(head.tries||0)+1;
-  const key=ck(head.cx,head.cz);
-  if(head.tries>=3){done.add(key);pend.delete(key);}
-  else{head.wait=(s.currentTick||0)+RETRY_DELAY_TICKS;que.push(head);}
-}
-function nearPlayer(cx,cz,r){
-  try{
-    for(const p of w.getPlayers()){
-      const pl=p.location;
-      if(Math.abs(Math.floor(pl.x/16)-cx)<=r&&Math.abs(Math.floor(pl.z/16)-cz)<=r)return true;
+// ── SCHEDULER (one chunk at a time, time-budgeted) ────────────
+let _currentJob=null,_jobCx=0,_jobCz=0,_jobFail0=0,_jobPhase=0;
+const STRUCT_GIVEUP=60;   // stamp a chunk's structures even if a neighbour never finishes building
+
+// Pick the next unit of work, or null when there is nothing to do right now.
+function pickNext(m){
+  let players;
+  try{players=w.getPlayers();}catch{return null;}
+  if(!players||!players.length)return null;
+  const pcs=[];
+  for(const p of players){const pl=p.location;pcs.push([Math.floor(pl.x/16),Math.floor(pl.z/16)]);}
+  const distSq=(cx,cz)=>{let best=Infinity;for(const c of pcs){const dx=cx-c[0],dz=cz-c[1],d=dx*dx+dz*dz;if(d<best)best=d;}return best;};
+  const REACH=(RADIUS+2)*(RADIUS+2);
+
+  // 1) Finish structures for interior chunks (all 8 neighbours already have terrain).
+  let bestS=null,bestSD=Infinity;
+  for(const k of STRUCT_PENDING){
+    if(FULL.has(k)){STRUCT_PENDING.delete(k);continue;}
+    const c=k.split(","),cx=+c[0],cz=+c[1];
+    const d=distSq(cx,cz);
+    if(d>REACH)continue;
+    if(!chunkLoaded(m,cx,cz))continue;
+    const wv=_structWait.get(k)||0;
+    if(!allNeighborsBuilt(m,cx,cz)&&wv<STRUCT_GIVEUP){_structWait.set(k,wv+1);continue;}
+    if(d<bestSD){bestSD=d;bestS={cx,cz,phase:1};}
+  }
+  if(bestS)return bestS;
+
+  // 2/3) Terrain expansion toward the nearest player.
+  let bestAdj=null,bestAdjD=Infinity;   // unbuilt + cardinally adjacent to a built chunk
+  let home=null,homeD=Infinity;         // a player's own chunk (fresh-start seed)
+  for(const c of pcs){
+    const pcx=c[0],pcz=c[1];
+    for(let dx=-RADIUS;dx<=RADIUS;dx++)for(let dz=-RADIUS;dz<=RADIUS;dz++){
+      const cx=pcx+dx,cz=pcz+dz,k=ck(cx,cz);
+      if(FULL.has(k)||TERRAIN.has(k)||isDone(k))continue;   // already built
+      if(!chunkLoaded(m,cx,cz))continue;                    // engine hasn't loaded it yet
+      const d=distSq(cx,cz);
+      if(dx===0&&dz===0&&d<homeD){homeD=d;home={cx,cz,phase:0};}
+      if(d<bestAdjD&&adjacentToBuilt(m,cx,cz)){bestAdjD=d;bestAdj={cx,cz,phase:0};}
     }
-  }catch{}
-  return false;
+  }
+  if(bestAdj)return bestAdj;   // nearest frontier chunk that touches built terrain
+  if(home)return home;         // nothing built nearby → load the player's own chunk first
+  return null;
 }
+
+function finishJob(){
+  const k=ck(_jobCx,_jobCz);
+  if(_jobPhase===0){
+    TERRAIN.add(k);PROBE_EMPTY.delete(k);
+    STRUCT_PENDING.add(k);
+  }else{
+    markDone(k);PROBE_EMPTY.delete(k);
+    STRUCT_PENDING.delete(k);_structWait.delete(k);
+    if(FULL.size>DONE_CACHE_MAX){
+      FULL.clear();TERRAIN.clear();STRUCT_PENDING.clear();PROBE_BUILT.clear();PROBE_EMPTY.clear();_structWait.clear();
+    }
+  }
+  _currentJob=null;
+}
+
+// Advance ONLY the in-flight job within the per-tick time budget. Returns as soon
+// as the job finishes (or aborts); the next chunk is not chosen until a later
+// tick, so one chunk always loads completely before another begins.
+function stepCurrent(){
+  const t0=NOW?NOW():0;
+  const stepCap=NOW?MAX_STEPS_PER_TICK:8;
+  let steps=0;
+  while(steps<stepCap&&(!NOW||NOW()-t0<BUDGET_MS)){
+    let r;
+    try{r=_currentJob.next();}catch{r={done:true};}
+    steps++;
+    if(_chunkFails-_jobFail0>FAIL_ABORT){   // chunk unloaded mid-build → drop, retry later
+      try{if(!r.done&&_currentJob.return)_currentJob.return();}catch{}
+      _currentJob=null;return;
+    }
+    if(r.done){finishJob();return;}
+  }
+}
+
 function kick(){
   if(run)return;
   run=true;
   const ticker=s.runInterval(()=>{try{
-    const t0=NOW?NOW():0;
-    const stepCap=NOW?MAX_STEPS_PER_TICK:8;
-    let steps=0;
-    while(steps<stepCap&&(!NOW||NOW()-t0<BUDGET_MS)){
-      if(!_currentJob){
-        const now=s.currentTick||0;
-        let probes=0,ready=false;
-        while(que.length&&probes<8){
-          const head=que[0],key=ck(head.cx,head.cz);
-          if(isDone(key)){que.shift();pend.delete(key);continue;}
-          if(head.wait&&head.wait>now){que.push(que.shift());probes++;continue;}
-          if(seeded&&!hasDoneNeighbor(head.cx,head.cz)){
-            head.adjW=(head.adjW||0)+1;
-            if(head.adjW<10){head.wait=now+RETRY_DELAY_TICKS;que.push(que.shift());probes++;continue;}
-          }
-          if(!chunkLoaded(dim(),head.cx,head.cz)){
-            head.wait=now+RETRY_DELAY_TICKS;
-            que.push(que.shift());probes++;continue;
-          }
-          ready=true;break;
-        }
-        if(!que.length){run=false;s.clearRun(ticker);return;}
-        if(!ready)return;
-        const{cx,cz}=que[0];
-        _currentJob=genJob(cx,cz);_jobCx=cx;_jobCz=cz;_jobFail0=_chunkFails;
-      }
-      let r;
-      try{r=_currentJob.next();}catch{r={done:true};}
-      steps++;
-      if(_chunkFails-_jobFail0>FAIL_ABORT){
-        try{if(!r.done&&_currentJob.return)_currentJob.return();}catch{}
-        _currentJob=null;
-        requeueHead();
-        continue;
-      }
-      if(r.done){
-        const fcx=_jobCx,fcz=_jobCz;
-        const key=ck(fcx,fcz);
-        markDone(key);pend.delete(key);que.shift();
-        _currentJob=null;
-        if(done.size>DONE_CACHE_MAX)done.clear();
-        for(let dx=-RADIUS;dx<=RADIUS;dx++)for(let dz=-RADIUS;dz<=RADIUS;dz++){
-          const ncx=fcx+dx,ncz=fcz+dz,nk=ck(ncx,ncz);
-          if(!isDone(nk)&&!pend.has(nk)&&nearPlayer(ncx,ncz,RADIUS+1)){
-            pend.add(nk);que.push({cx:ncx,cz:ncz});
-          }
-        }
-      }
-    }
+    if(_currentJob){stepCurrent();return;}   // never start another chunk mid-load
+    const m=dim();
+    const next=pickNext(m);
+    if(!next){run=false;s.clearRun(ticker);return;}
+    _jobCx=next.cx;_jobCz=next.cz;_jobPhase=next.phase;_jobFail0=_chunkFails;
+    _currentJob=genJob(next.cx,next.cz,_jobPhase);
+    stepCurrent();                            // begin the freshly selected chunk
   }catch{}},SCHED_INTERVAL);
 }
 
-// Player movement queues new chunks
-s.runInterval(()=>{
-  try{
-    for(const p of w.getPlayers()){
-      const{x,z}=p.location;
-      const pcx=Math.floor(x/16),pcz=Math.floor(z/16);
-      for(let dx=-RADIUS;dx<=RADIUS;dx++)for(let dz=-RADIUS;dz<=RADIUS;dz++){
-        const key=ck(pcx+dx,pcz+dz);
-        if(!isDone(key)&&!pend.has(key)){pend.add(key);que.push({cx:pcx+dx,cz:pcz+dz});}
-      }
-    }
-    if(que.length&&!run)kick();
-  }catch{}
-},20);
+// Players moving into fresh territory wake the idle loader.
+s.runInterval(()=>{try{if(!run&&w.getPlayers().length)kick();}catch{}},20);
 
 // ── PERIODIC PASSIVE-MOB RESPAWNS ──────────────────────────────
-// TWEAK: passive mobs keep appearing in their biomes on long, jittered
-// intervals (≈60–180 s per player) — herds of 2–4 of the local biome's pool,
-// spawned a short distance from the player. Long intervals + small herds keep
-// this cheap for low-end devices; vanilla mob caps prevent overpopulation.
+// Passive mobs keep appearing in their biomes on a long, jittered ~5–8 minute
+// timer per player — herds of 2–4 drawn from the local biome's FULL passive
+// roster (no hostiles). Axolotls only spawn into nearby water (incl. caves),
+// otherwise that pick is skipped. Long intervals + small herds + vanilla mob
+// caps keep this cheap and overpopulation-free.
 const _nextMobTick=new Map(); // player.id → tick when next herd may spawn
-function jitterTicks(){return 1200+((Math.random()*2400)|0);} // 60s..180s
+function jitterTicks(){return 6000+((Math.random()*3600)|0);} // 5min..8min
 s.runInterval(()=>{
   try{
     if(!K)return;
@@ -2011,18 +2752,30 @@ s.runInterval(()=>{
       const loc=p.location;
       const wx=Math.floor(loc.x),wz=Math.floor(loc.z);
       const sy=surfYM(wx,wz),bm=biome(wx,wz,sy);
-      if(sy<SEA)continue;
       const pool=PASSIVES[bm];
       if(!pool)continue;
-      const kind="minecraft:"+pool[(Math.random()*pool.length)|0];
+      const kind=pool[(Math.random()*pool.length)|0];
       const n=2+((Math.random()*3)|0);
+      if(isAxolotl(kind)){
+        // place axolotls into water near the player (surface pools or caves)
+        const py=Math.floor(loc.y);
+        for(let i=0;i<n;i++){
+          const a=Math.random()*6.2832,dist=6+((Math.random()*14)|0);
+          const sx=wx+Math.round(Math.cos(a)*dist),sz=wz+Math.round(Math.sin(a)*dist);
+          const wy=findWaterColumn(m,sx,sz,Math.min(py+6,SEA-1),Math.max(WMIN+4,py-40));
+          if(wy!=null)try{m.spawnEntity("minecraft:axolotl",{x:sx+0.5,y:wy,z:sz+0.5});}catch{}
+        }
+        continue;
+      }
+      if(sy<SEA)continue;
+      const id="minecraft:"+kind;
       for(let i=0;i<n;i++){
         // spawn 16–36 blocks away in a random direction (out of immediate sight)
         const a=Math.random()*6.2832,dist=16+((Math.random()*20)|0);
         const sx=wx+Math.round(Math.cos(a)*dist),sz=wz+Math.round(Math.sin(a)*dist);
         const ssy=surfYM(sx,sz);
         if(ssy<SEA)continue;
-        try{m.spawnEntity(kind,{x:sx,y:ssy+2,z:sz});}catch{}
+        try{m.spawnEntity(id,{x:sx,y:ssy+2,z:sz});}catch{}
       }
     }
   }catch{}
@@ -2055,3 +2808,167 @@ s.runInterval(()=>{
     }
   }catch{}
 },40);
+
+// ══════════════════════════════════════════════════════════════════════
+// LOCATE — a /locate-style finder for this SCRIPT world's biomes & structures.
+//   In-game usage (either works):
+//     • Chat:        !locate <name>             e.g.  !locate desert
+//                    !locate biome <name>             !locate structure village
+//     • Scriptevent: /scriptevent wg:locate <name>
+//   Biomes and structures are placed deterministically from the world seed, so
+//   the finder simply replays the same placement maths over a spiral of chunks
+//   and returns the nearest match. The search runs across ticks (system.runJob)
+//   so it never freezes the game.
+// ══════════════════════════════════════════════════════════════════════
+const BIOME_IDS={
+  ocean:0,desert:1,savanna:2,plains:3,forest:4,birch:5,birch_forest:5,
+  jungle:6,mangrove:7,mangrove_swamp:7,swamp:8,taiga:9,snowy:10,snow:10,
+  snowy_plains:10,mountain:11,mountains:11,coral:12,coral_reef:12,
+  dark_oak:13,dark_forest:13,cherry:14,cherry_grove:14,pale:15,pale_garden:15,
+  ice_spikes:16,ice:16,mooshroom:17,mushroom:17,mushroom_island:17,mesa:18,badlands:18,
+};
+const STRUCT_ALIAS={
+  dungeon:'dungeon',ruin:'ruin',mineshaft:'mineshaft',ruined_portal:'ruined_portal',
+  portal:'ruined_portal',shipwreck:'shipwreck',outpost:'pillager_outpost',
+  pillager_outpost:'pillager_outpost',desert_temple:'desert_temple',temple:'desert_temple',
+  jungle_temple:'jungle_temple',village:'village',stronghold:'stronghold',geode:'geode',
+  fossil:'fossil',sculk_cave:'sculk_cave',sculk:'sculk_cave',deep_dark:'sculk_cave',deepdark:'sculk_cave',
+};
+const _tell=(pl,msg)=>{try{if(pl&&pl.sendMessage)pl.sendMessage(msg);else w.sendMessage(msg);}catch{}};
+
+// Returns false, or {x,z} of the structure's world position, if `name` would
+// generate in chunk (cx,cz) — replays placeStructures' exact selection logic.
+function structurePresentAt(name,cx,cz){
+  if(name==='stronghold')return (cx===0&&cz===0)?{x:SHX,z:SHZ}:false;
+  const wx=cx*16+8,wz=cz*16+8;
+  const sy=surfYM(wx,wz),bm=biome(wx,wz,sy);
+  const nearOrigin=Math.abs(cx)<=1&&Math.abs(cz)<=1;
+  if(name==='village'){
+    const vc=getVillageCenter(cx,cz);
+    if(!vc)return false;
+    if(Math.floor(vc.vcx/16)!==cx||Math.floor(vc.vcz/16)!==cz)return false;
+    const vsy=surfYM(vc.vcx,vc.vcz),vbm=biome(vc.vcx,vc.vcz,vsy);
+    if(vbm===0||vbm===11||vbm===12||vbm===16||vbm===17)return false;
+    return {x:vc.vcx,z:vc.vcz};
+  }
+  if(name==='geode')return (!nearOrigin&&colRnd(cx,cz,409)<0.028)?{x:wx,z:wz}:false;
+  if(name==='fossil')return (!nearOrigin&&colRnd(cx,cz,401)<0.045)?{x:wx,z:wz}:false;
+  if(name==='sculk_cave'){
+    if(p2(wx*0.004+33000,wz*0.004)*P2N<=-0.05)return false;
+    const dBot=Math.max(WMIN+6,-500);
+    if(DEEPDARK_TOP-2<=dBot)return false;
+    const fy=findCaveFloor(wx,wz,DEEPDARK_TOP-2,dBot);
+    return (fy!=null&&fy<=DEEPDARK_TOP)?{x:wx,z:wz,y:fy+1}:false;
+  }
+  if(nearOrigin)return false;            // registry structures skip the 3×3 origin
+  let mainUsed=false;
+  for(const st of STRUCTURES){
+    if(st.group==="main"&&mainUsed)continue;
+    const v=p2(cx*st.s+st.o,cz*st.s)*P2N;
+    if(!st.test(v))continue;
+    if(st.ok&&!st.ok(bm,sy))continue;
+    if(st.group==="main")mainUsed=true;
+    if(st.name===name)return {x:wx,z:wz};
+  }
+  return false;
+}
+
+function* ringChunks(pcx,pcz,r){
+  if(r===0){yield[pcx,pcz];return;}
+  for(let dx=-r;dx<=r;dx++){yield[pcx+dx,pcz-r];yield[pcx+dx,pcz+r];}
+  for(let dz=-r+1;dz<=r-1;dz++){yield[pcx-r,pcz+dz];yield[pcx+r,pcz+dz];}
+}
+
+// Spiral outward from the player, nearest-match guaranteed, time-sliced.
+function* locateSearch(player,kind,name,targetId,ox,oz){
+  const pcx=Math.floor(ox/16),pcz=Math.floor(oz/16);
+  const MAXR=500;            // chunks (~8000 blocks)
+  const PROC_CAP=600000;
+  let best=null,bestD=Infinity,processed=0;
+  for(let r=0;r<=MAXR;r++){
+    if(best&&(r*16)*(r*16)>bestD)break;       // no closer match possible
+    for(const c of ringChunks(pcx,pcz,r)){
+      const cx=c[0],cz=c[1];
+      let hit=null;
+      if(kind==='biome'){
+        const wx=cx*16+8,wz=cz*16+8,sy=surfYM(wx,wz);
+        if(biome(wx,wz,sy)===targetId)hit={x:wx,y:sy,z:wz};
+      }else{
+        const p=structurePresentAt(name,cx,cz);
+        if(p)hit={x:p.x,z:p.z,y:p.y};
+      }
+      if(hit){
+        const dd=(hit.x-ox)*(hit.x-ox)+(hit.z-oz)*(hit.z-oz);
+        if(dd<bestD){bestD=dd;best=hit;}
+      }
+      if((++processed%4096)===0)yield;
+      if(processed>PROC_CAP){r=MAXR+1;break;}
+    }
+    yield;
+  }
+  if(best){
+    const y=(best.y!==undefined)?best.y:surfYM(best.x,best.z);
+    const dist=Math.round(Math.sqrt(bestD));
+    _tell(player,`§a[Locate] Nearest §f${name}§a is at §f${best.x}, ${y}, ${best.z}  §7(${dist} blocks away)`);
+  }else{
+    _tell(player,`§c[Locate] No §f${name}§c found within ${MAXR*16} blocks.`);
+  }
+}
+
+function startLocate(player,kind,name,id,ox,oz){
+  try{initNoise();}catch{}
+  try{updateBounds(dim());}catch{}
+  _tell(player,`§7[Locate] Searching for §f${name}§7…`);
+  const job=locateSearch(player,kind,name,id,ox,oz);
+  if(s.runJob){try{s.runJob(job);return;}catch{}}
+  // Fallback driver if runJob is unavailable: ~3000 steps/tick.
+  const h=s.runInterval(()=>{try{for(let i=0;i<3000;i++){if(job.next().done){s.clearRun(h);return;}}}catch{s.clearRun(h);}},1);
+}
+
+function runLocate(player,argstr,ox,oz){
+  const parts=String(argstr||"").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if(!parts.length||parts[0]==='help'||parts[0]==='list'){
+    _tell(player,"§e[Locate] Usage: §f!locate <name>§e  or  §f!locate biome|structure <name>");
+    _tell(player,"§7 Biomes: ocean desert savanna plains forest birch jungle mangrove swamp taiga snowy mountain coral dark_oak cherry pale ice_spikes mooshroom mesa");
+    _tell(player,"§7 Structures: dungeon ruin mineshaft ruined_portal shipwreck outpost desert_temple jungle_temple village stronghold geode fossil sculk_cave");
+    return;
+  }
+  let kind=null,name=parts[0];
+  if(parts[0]==='biome'||parts[0]==='structure'){kind=parts[0];name=parts[1]||"";}
+  if(!name){_tell(player,"§c[Locate] Specify a biome or structure name. Try §f!locate help");return;}
+  if(kind==='biome'||(kind===null&&name in BIOME_IDS)){
+    if(!(name in BIOME_IDS)){_tell(player,`§c[Locate] Unknown biome '${name}'.`);return;}
+    startLocate(player,'biome',name,BIOME_IDS[name],ox,oz);
+  }else{
+    const canon=STRUCT_ALIAS[name];
+    if(!canon){_tell(player,`§c[Locate] Unknown name '${name}'. Try §f!locate help`);return;}
+    startLocate(player,'structure',canon,null,ox,oz);
+  }
+}
+
+// Chat interface: "!locate ..." or ".locate ..."
+try{
+  w.beforeEvents?.chatSend?.subscribe?.((ev)=>{
+    try{
+      const msg=ev.message||"";
+      if(!/^[!.]locate(\s|$)/i.test(msg))return;
+      ev.cancel=true;
+      const player=ev.sender;
+      const loc=player?player.location:{x:0,z:0};
+      const args=msg.replace(/^[!.]locate\s*/i,"");
+      s.run(()=>{try{runLocate(player,args,loc.x,loc.z);}catch{}});
+    }catch{}
+  });
+}catch{}
+
+// Scriptevent interface: /scriptevent wg:locate <name>
+try{
+  s.afterEvents?.scriptEventReceive?.subscribe?.((ev)=>{
+    try{
+      if(ev.id!=="wg:locate")return;
+      const player=ev.sourceEntity&&ev.sourceEntity.typeId==="minecraft:player"?ev.sourceEntity:null;
+      const loc=player?player.location:{x:0,z:0};
+      runLocate(player,ev.message,loc.x,loc.z);
+    }catch{}
+  });
+}catch{}
