@@ -1,3 +1,10 @@
+Addon/Behavior Pack creation guide
+1- put overworld.json into a folder named 'dimensions'
+2- zip the scripts folder, manifest.json,pack icon, and dimensions folder
+3- rename the zip to something.mcpack (or .mcaddon)
+
+FUNDEMNTALLY NOT COMPATIBLE WITH ANY STRUCTURE OR BETTER TERRAIN MODS
+
 Annotated Guide & Tuning Manual
 
 Disclaimer!!! This script and guide are vibe coded and I take no credit for their functionality, I only wanted to have this as a resource for any other player to use and edit to their discresion
