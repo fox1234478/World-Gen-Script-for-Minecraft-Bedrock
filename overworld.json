@@ -1,0 +1,18 @@
+//this is the part that extends the worl height -512 to 512 is max, must be multiples of 16
+{
+  "format_version": "1.18.0",
+  "minecraft:dimension": {
+    "description": {
+      "identifier": "minecraft:overworld"
+    },
+    "components": {
+      "minecraft:dimension_bounds": {
+        "min": -512,
+        "max": 512
+      },
+      "minecraft:generation": {
+        "generator_type": "void"
+      }
+    }
+  }
+}
