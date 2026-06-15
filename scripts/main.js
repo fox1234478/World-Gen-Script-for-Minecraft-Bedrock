@@ -43,6 +43,7 @@ function pickSpawn(){
     initNoise();
     try{updateBounds(dim());}catch{}
     const targets=[2,4,5,9,13,14,15,6];
+    const targetsSet=new Set(targets);
     const want=targets[(perm[3]+perm[91])%targets.length];
     let anyTarget=null,anyLand=null;
     for(let r=0;r<=480;r+=24){
@@ -54,7 +55,7 @@ function pickSpawn(){
         if(sy<SEA+2||sy>250)continue;
         const b=biome(wx,wz,sy);
         if(!anyLand&&b!==0&&b!==12)anyLand={x:wx,y:sy+2,z:wz};
-        if(!anyTarget&&targets.indexOf(b)>=0)anyTarget={x:wx,y:sy+2,z:wz};
+        if(!anyTarget&&targetsSet.has(b))anyTarget={x:wx,y:sy+2,z:wz};
         if(b===want){SPAWN.x=wx;SPAWN.y=sy+2;SPAWN.z=wz;_spawnPicked=true;return;}
       }
     }
@@ -572,7 +573,7 @@ function _loadSpawnerReg(){
     const raw=w.getDynamicProperty(SPAWNER_REG_KEY);
     if(typeof raw==="string"&&raw.length>2){
       const arr=JSON.parse(raw);
-      for(const e of arr)_spawnerReg.set(_spawnerKey(e.x,e.y,e.z),e.mob);
+      for(const e of arr)_spawnerReg.set(_spawnerKey(e.x,e.y,e.z),{x:e.x,y:e.y,z:e.z,mob:e.mob});
     }
   }catch{}
 }
@@ -581,9 +582,8 @@ function _saveSpawnerReg(){
   _spawnerDirty=false;
   try{
     const arr=[];
-    for(const[k,mob] of _spawnerReg){
-      const[x,y,z]=k.split(",").map(Number);
-      arr.push({x,y,z,mob});
+    for(const e of _spawnerReg.values()){
+      arr.push({x:e.x,y:e.y,z:e.z,mob:e.mob});
       if(arr.length>=MAX_SPAWNER_ENTRIES)break;
     }
     w.setDynamicProperty(SPAWNER_REG_KEY,JSON.stringify(arr));
@@ -607,7 +607,7 @@ function placeSpawner(m,x,y,z,mob){
   const key=_spawnerKey(x,y,z);
   if(!_spawnerReg.has(key)){
     if(_spawnerReg.size<MAX_SPAWNER_ENTRIES){
-      _spawnerReg.set(key,mob);
+      _spawnerReg.set(key,{x,y,z,mob});
       _spawnerDirty=true;
     }
   }
@@ -627,8 +627,8 @@ s.runInterval(()=>{
     const m=dim();
     const players=w.getPlayers();
     const toRemove=[];
-    for(const[key,mob] of _spawnerReg){
-      const[x,y,z]=key.split(",").map(Number);
+    for(const[key,entry] of _spawnerReg){
+      const{x,y,z,mob}=entry;
       // Verify the spawner block still exists — if not, unregister.
       try{
         const b=m.getBlock({x,y,z});
@@ -744,7 +744,7 @@ function surfYM(wx,wz){
   let v=_syc.get(k);
   if(v===undefined){
     v=surfY(wx,wz);
-    if(_syc.size>20000)_syc.clear();
+    if(_syc.size>=25000){let n=0;for(const ek of _syc.keys()){_syc.delete(ek);if(++n>=5000)break;}}
     _syc.set(k,v);
   }
   return v;
@@ -2518,7 +2518,7 @@ function* placeStructures(m,cx,cz,surfs,bms){
 // water, across the height range counts as unbuilt.
 const FULL=new Set();           // chunks fully complete (terrain+structures); persisted
 const TERRAIN=new Set();        // chunks whose terrain (phase 0) is complete
-const STRUCT_PENDING=new Set(); // terrain done, structures still owed
+const STRUCT_PENDING=new Map(); // key → {cx,cz}; terrain done, structures still owed
 const PROBE_BUILT=new Set();    // probe-confirmed built (built stays built)
 const PROBE_EMPTY=new Set();    // probe-confirmed empty (cleared once we build it)
 const _structWait=new Map();    // chunk → number of times its structure phase was deferred
@@ -2649,9 +2649,8 @@ function pickNext(m){
 
   // 1) Finish structures for interior chunks (all 8 neighbours already have terrain).
   let bestS=null,bestSD=Infinity;
-  for(const k of STRUCT_PENDING){
+  for(const [k,{cx,cz}] of STRUCT_PENDING){
     if(FULL.has(k)){STRUCT_PENDING.delete(k);continue;}
-    const c=k.split(","),cx=+c[0],cz=+c[1];
     const d=distSq(cx,cz);
     if(d>REACH)continue;
     if(!chunkLoaded(m,cx,cz))continue;
@@ -2684,7 +2683,7 @@ function finishJob(){
   const k=ck(_jobCx,_jobCz);
   if(_jobPhase===0){
     TERRAIN.add(k);PROBE_EMPTY.delete(k);
-    STRUCT_PENDING.add(k);
+    STRUCT_PENDING.set(k,{cx:_jobCx,cz:_jobCz});
   }else{
     markDone(k);PROBE_EMPTY.delete(k);
     STRUCT_PENDING.delete(k);_structWait.delete(k);
