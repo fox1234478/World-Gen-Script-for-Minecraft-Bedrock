@@ -98,16 +98,20 @@ function initNoise(){
 }
 const fade=t=>t*t*t*(t*(t*6-15)+10);
 const lerp=(a,b,t)=>a+t*(b-a);
-const g2=(h,x,z)=>{switch(h&7){case 0:return x+z;case 1:return -x+z;case 2:return x-z;case 3:return -x-z;case 4:return x;case 5:return -x;case 6:return z;default:return -z;}};
+// _F: correct Math.floor for negative numbers without the global property lookup
+const _F=x=>{const n=x|0;return n>x?n-1:n;};
+// g2 lookup tables replace switch-case: 2 array reads + 2 multiplications
+const _G2X=[1,-1,1,-1,1,-1,0,0],_G2Z=[1,1,-1,-1,0,0,1,-1];
+const g2=(h,x,z)=>{const i=h&7;return _G2X[i]*x+_G2Z[i]*z;};
 const g3=(h,x,y,z)=>{const u=h<8?x:y,v=h<4?y:(h===12||h===14?x:z);return((h&1)?-u:u)+((h&2)?-v:v);};
 function p2(x,z){
-  const fx=Math.floor(x),fz=Math.floor(z);
+  const fx=_F(x),fz=_F(z);
   const X=fx&255,Z=fz&255;x-=fx;z-=fz;
   const u=fade(x),v=fade(z),a=perm[X]+Z,b=perm[X+1]+Z;
   return lerp(lerp(g2(perm[a],x,z),g2(perm[b],x-1,z),u),lerp(g2(perm[a+1],x,z-1),g2(perm[b+1],x-1,z-1),u),v);
 }
 function p3(x,y,z){
-  const fx=Math.floor(x),fy=Math.floor(y),fz=Math.floor(z);
+  const fx=_F(x),fy=_F(y),fz=_F(z);
   const X=fx&255,Y=fy&255,Z=fz&255;
   x-=fx;y-=fy;z-=fz;
   const u=fade(x),v=fade(y),wf=fade(z);
@@ -118,7 +122,7 @@ function p3(x,y,z){
 function fbm2(x,z,oct,lac,gain){
   let v=0,a=1,f=1,mx=0;
   for(let i=0;i<oct;i++){v+=p2(x*f,z*f)*a;mx+=a;a*=gain;f*=lac;}
-  return v/mx;
+  return v*(1/mx);
 }
 function colRnd(a,b,salt){
   let h=(Math.imul(a,374761393)^Math.imul(b,668265263)^Math.imul(salt,2246822519))>>>0;
