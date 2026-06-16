@@ -2781,8 +2781,8 @@ function pickNext(m){
   // 2/3) Terrain expansion toward the nearest player.
   let bestAdj=null,bestAdjD=Infinity;   // unbuilt + cardinally adjacent to a built chunk
   let home=null,homeD=Infinity;         // a player's own chunk (fresh-start seed)
-  for(const c of pcs){
-    const pcx=c[0],pcz=c[1];
+  for(let pi=0;pi<_pcs.length;pi+=2){
+    const pcx=_pcs[pi],pcz=_pcs[pi+1];
     for(let dx=-RADIUS;dx<=RADIUS;dx++)for(let dz=-RADIUS;dz<=RADIUS;dz++){
       const cx=pcx+dx,cz=pcz+dz,k=ck(cx,cz);
       if(FULL.has(k)||TERRAIN.has(k)||isDone(k))continue;   // already built
