@@ -191,7 +191,7 @@ function resolveBlocks(){
       mush_stem:tryR("minecraft:mushroom_stem"),
       spr_plank:tryR("minecraft:spruce_planks"),jun_plank:tryR("minecraft:jungle_planks"),
       aca_plank:tryR("minecraft:acacia_planks"),dk_plank:tryR("minecraft:dark_oak_planks"),
-      chr_plank:tryR("minecraft:cherry_planks"),plo_plank:tryR("minecraft:pale_oak_planks"),
+      birch_plank:tryR("minecraft:birch_planks"),chr_plank:tryR("minecraft:cherry_planks"),plo_plank:tryR("minecraft:pale_oak_planks"),
       seagrass:tryR("minecraft:seagrass"),kelp:tryR("minecraft:kelp"),
       lily_pad:tryR("minecraft:waterlily"),
       coral_blue:mkC("blue"),coral_pink:mkC("pink"),coral_purple:mkC("purple"),
@@ -937,7 +937,6 @@ function fillCol(m,wx,wz,sy,bm,pre){
   // Submerged column (ocean / river / lake): caves opening just under the water
   // body flood, becoming water caves.
   const submerged=sy<SEA;
-  const floodTop=submerged?sy:-1e9;
   // Deep dark: caves at DEEPDARK_TOP (-300) and below get sculk-coated in coherent
   // regional patches. Sensors / shriekers are added in the deferred decorate pass.
   const deepDark=!!K.sculk&&(p2(wx*0.004+33000,wz*0.004)*P2N>-0.05);
@@ -950,7 +949,7 @@ function fillCol(m,wx,wz,sy,bm,pre){
     const prefilled=ds?dsOK:stOK;
     if(caveAtF(y)){
       if(lavaCol&&y<=LAVA_LAKE_TOP)sb(m,wx,y,wz,K.lava);
-      else if(y<=wLvl||(submerged&&y>=floodTop-30&&y<floodTop))sb(m,wx,y,wz,K.water);
+      else if(y<=wLvl||submerged)sb(m,wx,y,wz,K.water);
       else{
         if(prefilled)sb(m,wx,y,wz,K.air);
         if(!prevCave&&y-1>yFloor){
@@ -1054,7 +1053,7 @@ function fillCol(m,wx,wz,sy,bm,pre){
     case 2:sb(m,wx,ty,wz,Math.abs(p2(wx*0.08,wz*0.08))>0.22?K.coarse:K.grass);for(let d=1;d<=3&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.dirt);break;
     case 7:for(let d=0;d<=2&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.mud);for(let d=3;d<=4&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.dirt);break;
     case 8:sb(m,wx,ty,wz,Math.abs(p2(wx*0.09,wz*0.09))>0.30?K.mud:K.grass);for(let d=1;d<=3&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.dirt);break;
-    case 9:sb(m,wx,ty,wz,Math.abs(p2(wx*0.10,wz*0.10))>0.30?K.coarse:K.grass);for(let d=1;d<=3&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.dirt);break;
+    case 9:{const _p9=p2(wx*0.10,wz*0.10),_a9=_p9<0?-_p9:_p9;sb(m,wx,ty,wz,_a9>0.50?K.podzol:(_a9>0.30?K.coarse:K.grass));for(let d=1;d<=3&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.dirt);}break;
     case 10:sb(m,wx,ty,wz,K.snow);for(let d=1;d<=3&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.dirt);break;
     case 11:if(sy>220){sb(m,wx,ty+1,wz,K.snow);return ty+1;}sb(m,wx,ty,wz,K.grass);for(let d=1;d<=2&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.dirt);break;
     case 13:if(beach)doBeach();else{sb(m,wx,ty,wz,K.podzol);for(let d=1;d<=3&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.dirt);}break;
@@ -1070,6 +1069,7 @@ function fillCol(m,wx,wz,sy,bm,pre){
         sb(m,wx,ty-d,wz,tc||K.stone);
       }
     }break;
+    case 6:{const _p6=p2(wx*0.09,wz*0.09),_a6=_p6<0?-_p6:_p6;sb(m,wx,ty,wz,_a6>0.48?K.podzol:(_a6>0.32?K.coarse:K.grass));for(let d=1;d<=3&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.dirt);}break;
     default:if(beach)doBeach();else{sb(m,wx,ty,wz,K.grass);for(let d=1;d<=3&&ty-d>DS_TOP;d++)sb(m,wx,ty-d,wz,K.dirt);}
   }
   return ty;
@@ -1113,50 +1113,57 @@ function placeOak(m,wx,ty,wz){
   const h=4+((rnd()*3)|0);
   leafLayer(m,wx,ty+h-2,wz,K.oak_leaf,2,1,rnd);
   leafLayer(m,wx,ty+h-1,wz,K.oak_leaf,2,1,rnd);
-  leafLayer(m,wx,ty+h,  wz,K.oak_leaf,1,1,rnd);
+  leafLayer(m,wx,ty+h,  wz,K.oak_leaf,2,1,rnd);
   leafLayer(m,wx,ty+h+1,wz,K.oak_leaf,1,2,rnd);
   trunk1(m,wx,ty,wz,K.oak_log,h);
+  if(rnd()<0.40){const bdx=rnd()<0.5?1:-1;sb(m,wx+bdx,ty+h-2,wz,K.oak_log);sb(m,wx+bdx,ty+h-1,wz,K.oak_leaf);}
   if(K.bee_nest&&rnd()>0.95)sb(m,wx+1,ty+h-2,wz,K.bee_nest);
 }
 function placeBirch(m,wx,ty,wz){
   const rnd=mkTRnd(wx,wz,103);
-  const h=5+((rnd()*3)|0);
+  const h=5+((rnd()*4)|0);           // taller: 5..8
   leafLayer(m,wx,ty+h-2,wz,K.birch_leaf,2,1,rnd);
   leafLayer(m,wx,ty+h-1,wz,K.birch_leaf,2,1,rnd);
-  leafLayer(m,wx,ty+h,  wz,K.birch_leaf,1,1,rnd);
+  leafLayer(m,wx,ty+h,  wz,K.birch_leaf,2,0,rnd);
   leafLayer(m,wx,ty+h+1,wz,K.birch_leaf,1,2,rnd);
   trunk1(m,wx,ty,wz,K.birch_log,h);
 }
 function placeSpruce(m,wx,ty,wz){
   const rnd=mkTRnd(wx,wz,107);
-  const h=7+((rnd()*5)|0);
-  sb(m,wx,ty+h+1,wz,K.spruce_leaf);
-  let r=1;
-  for(let ly=h;ly>=3;ly--){
-    leafLayer(m,wx,ty+ly,wz,K.spruce_leaf,r,r>=2?2:0,rnd);
-    if(rnd()<0.5)r=Math.min(3,r+1);else if(r>1&&rnd()<0.35)r--;
+  const h=7+((rnd()*5)|0);           // trunk 7..11
+  sb(m,wx,ty+h+1,wz,K.spruce_leaf); // tip
+  for(let ly=h;ly>=2;ly--){
+    const d=h-ly;                    // 0=top, grows downward
+    const r=Math.min(3,1+(d>>1));   // r=1 for top 2 layers, then 2, then 3
+    const rv=rnd()<0.20?Math.min(3,r+1):r; // occasional wider tier for variation
+    leafLayer(m,wx,ty+ly,wz,K.spruce_leaf,rv,rv>=2?1:0,rnd);
   }
   trunk1(m,wx,ty,wz,K.spruce_log,h);
 }
 function placeMegaSpruce(m,wx,ty,wz){
   const rnd=mkTRnd(wx,wz,109);
-  const h=16+((rnd()*8)|0);
-  leafLayer2(m,wx,ty+h+1,wz,K.spruce_leaf,0,rnd);
-  let r=1;
+  const h=16+((rnd()*8)|0);          // 16..23
+  leafLayer2(m,wx,ty+h+1,wz,K.spruce_leaf,0,rnd); // tip
   for(let ly=h;ly>=5;ly--){
-    leafLayer2(m,wx,ty+ly,wz,K.spruce_leaf,r,rnd);
-    if(rnd()<0.45)r=Math.min(4,r+1);else if(r>1&&rnd()<0.30)r--;
+    const d=h-ly;
+    const r=Math.min(4,1+(d>>1));   // grows from 1 to 4 going down
+    const rv=rnd()<0.18?Math.min(4,r+1):r;
+    leafLayer2(m,wx,ty+ly,wz,K.spruce_leaf,rv,rnd);
   }
   trunk2(m,wx,ty,wz,K.spruce_log,h);
 }
 function placeJungle(m,wx,ty,wz){
   const rnd=mkTRnd(wx,wz,151);
-  const h=8+((rnd()*6)|0);
+  const h=9+((rnd()*6)|0);           // 9..14, taller
+  leafLayer(m,wx,ty+h-2,wz,K.jungle_leaf,3,2,rnd);
   leafLayer(m,wx,ty+h-1,wz,K.jungle_leaf,2,1,rnd);
   leafLayer(m,wx,ty+h,  wz,K.jungle_leaf,2,1,rnd);
   leafLayer(m,wx,ty+h+1,wz,K.jungle_leaf,1,2,rnd);
   trunk1(m,wx,ty,wz,K.jungle_log,h);
-  if(K.vine)for(let i=0;i<4;i++)sb(m,wx+((rnd()*5)|0)-2,ty+h-2,wz+((rnd()*5)|0)-2,K.vine);
+  if(K.vine)for(let i=0;i<6;i++){
+    const vx=wx+((rnd()*5)|0)-2,vz=wz+((rnd()*5)|0)-2;
+    sb(m,vx,ty+2+((rnd()*(h-3))|0),vz,K.vine);
+  }
 }
 function placeMegaJungle(m,wx,ty,wz){
   const rnd=mkTRnd(wx,wz,113);
@@ -1165,7 +1172,7 @@ function placeMegaJungle(m,wx,ty,wz){
   leafLayer2(m,wx,ty+h,  wz,K.jungle_leaf,3,rnd);
   leafLayer2(m,wx,ty+h+1,wz,K.jungle_leaf,2,rnd);
   trunk2(m,wx,ty,wz,K.jungle_log,h);
-  if(K.vine)for(let i=0;i<6;i++){
+  if(K.vine)for(let i=0;i<10;i++){
     const side=(rnd()*4)|0;
     const vx=side===0?-1:side===1?2:((rnd()*2)|0);
     const vz=side===2?-1:side===3?2:((rnd()*2)|0);
@@ -1210,41 +1217,34 @@ function placeCherry(m,wx,ty,wz){
   if(!K.cherry_log)return placeOak(m,wx,ty,wz);
   const rnd=mkTRnd(wx,wz,137);
   const LF=K.cherry_leaf,LG=K.cherry_log;
-  // Vanilla cherry: a short trunk that forks into 2-4 upward-angled branches,
-  // each capped by a rounded pink blossom blob; petals scatter on the ground.
-  const h=5+((rnd()*3)|0);                     // trunk 5..7
+  const h=4+((rnd()*3)|0);           // short trunk 4..6
   trunk1(m,wx,ty,wz,LG,h);
-  // Round blossom blob helper.
+  // oblate blossom blob: wide and slightly flat, fuzzy edges
   const blob=(bx,by,bz,r)=>{
-    for(let dx=-r;dx<=r;dx++)for(let dy=-1;dy<=1;dy++)for(let dz=-r;dz<=r;dz++){
-      if(dx*dx+dz*dz+dy*dy*2>r*r+1)continue;
-      if(Math.abs(dx)===r&&Math.abs(dz)===r&&rnd()<0.6)continue;
+    for(let dx=-r;dx<=r;dx++)for(let dy=-1;dy<=r;dy++)for(let dz=-r;dz<=r;dz++){
+      const d2=dx*dx+dz*dz+(dy<0?dy*dy*4:dy*dy);
+      if(d2>r*r+1)continue;
+      if(d2>r*r-0.5&&rnd()<0.55)continue;
       sb(m,bx+dx,by+dy,bz+dz,LF);
     }
   };
-  // central crown
-  blob(wx,ty+h,wz,2);
-  // forked branches
+  blob(wx,ty+h+1,wz,3);             // large central crown (r=3)
   const dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]];
-  const nB=2+((rnd()*3)|0);                     // 2..4 branches
+  const nB=3+((rnd()*3)|0);         // 3..5 branches
   const used={};
-  for(let i=0;i<nB;i++){
+  for(let i=0;i<nB&&i<dirs.length;i++){
     let di=(rnd()*dirs.length)|0;
-    if(used[di]){di=(di+1)%dirs.length;}
+    for(let t=0;t<8&&used[di];t++)di=(di+1)%dirs.length;
     used[di]=1;
     const d=dirs[di];
-    const reach=2+((rnd()*2)|0);                // branch length 2..3
-    let bx=wx,bz=wz,by=ty+h-1-((rnd()*2)|0);
-    for(let step=1;step<=reach;step++){
-      bx+=d[0];bz+=d[1];by+=1;
-      sb(m,bx,by,bz,LG);
-    }
+    const reach=2+((rnd()*2)|0);
+    let bx=wx,bz=wz,by=ty+h-1;
+    for(let step=0;step<reach;step++){bx+=d[0];bz+=d[1];by+=1;sb(m,bx,by,bz,LG);}
     blob(bx,by+1,bz,2);
   }
-  // ground petals
-  if(K.pink_petals)for(let i=0,n=2+((rnd()*3)|0);i<n;i++){
-    const px=wx+((rnd()*5)|0)-2,pz=wz+((rnd()*5)|0)-2;
-    sb(m,px,ty,pz,K.pink_petals);
+  if(K.pink_petals){
+    const n=3+((rnd()*5)|0);
+    for(let i=0;i<n;i++)sb(m,wx+((rnd()*11)|0)-5,ty,wz+((rnd()*11)|0)-5,K.pink_petals);
   }
 }
 function placePaleOak(m,wx,ty,wz){
@@ -1263,6 +1263,17 @@ function placePaleOak(m,wx,ty,wz){
   trunk2(m,wx,ty,wz,K.pale_oak_log,h);
   branches2(m,wx,ty+h-1,wz,K.pale_oak_log,lf,rnd);
   if(K.creaking_heart&&rnd()<0.25)sb(m,wx,ty+(h>>1),wz,K.creaking_heart);
+}
+function placeAzaleaTree(m,wx,ty,wz){
+  if(!K.azalea)return;
+  const rnd=mkTRnd(wx,wz,333);
+  const h=3+((rnd()*2)|0);
+  const lf=(K.flow_azalea&&rnd()<0.5)?K.flow_azalea:K.azalea;
+  leafLayer(m,wx,ty+h-1,wz,lf,2,1,rnd);
+  leafLayer(m,wx,ty+h,  wz,lf,2,1,rnd);
+  leafLayer(m,wx,ty+h+1,wz,lf,1,2,rnd);
+  trunk1(m,wx,ty,wz,K.oak_log,h);
+  if(K.rooted_dirt&&ty-1>WMIN)sb(m,wx,ty-1,wz,K.rooted_dirt);
 }
 function giantMushroom(m,wx,ty,wz){
   const h=5+Math.floor(Math.abs(p2(wx*0.4,wz*0.4))*4);
@@ -1482,17 +1493,18 @@ function* placeFeat(m,cx,cz,surfs,bms,tys){
 
       const tr=treeRoll(wx,wz);
       const grove=groveAt(wx,wz);
+      const noCave=sy-ty<=4;        // suppress trees that would spawn inside cave openings
       const list=TREES[bm];
-      if(list){
+      if(list&&noCave){
         const maxT=TREE_MAXT[bm];
         // pass threshold first (cheap), then adjacency suppression
         if(tr<maxT*grove&&treeIsLocalMin(wx,wz,tr,maxT)){
           for(const e of list){if(tr<e[0]*grove){e[1](m,wx,ty+1,wz);break;}}
         }
       }
-      else if(bm===11){if(sy>160&&tr<0.05*grove&&treeIsLocalMin(wx,wz,tr,0.05))placeSpruce(m,wx,ty+1,wz);}
-      else if(bm===17){if(tr<0.12*grove)giantMushroom(m,wx,ty+1,wz);}
-      else if(bm===18&&tr<0.015){
+      else if(bm===11&&noCave){if(sy>160&&tr<0.05*grove&&treeIsLocalMin(wx,wz,tr,0.05))placeSpruce(m,wx,ty+1,wz);}
+      else if(bm===17&&noCave){if(tr<0.12*grove)giantMushroom(m,wx,ty+1,wz);}
+      else if(bm===18&&noCave&&tr<0.015){
         const TC2=[K.red_terracotta,K.orange_terracotta,K.terracotta];
         const ph=3+((colRnd(wx,wz,31)*5)|0);
         const pilBlk=TC2[(colRnd(wx,wz,37)*3)|0]||K.stone;
@@ -2155,36 +2167,47 @@ function bigMushroom(m,wx,ty,wz,variant,brown){
   if(!cap)return;
   const stem=K.mush_stem||cap;
   if(variant===1){                                  // WIDE FLAT
-    const h=3+((colRnd(wx,wz,521)*2)|0);
+    const h=2+((colRnd(wx,wz,521)*4)|0);            // 2..5 tall
+    const R=2+((colRnd(wx,wz,522)*4)|0);            // 2..5 radius
     for(let y=0;y<h;y++)sb(m,wx,ty+y,wz,stem);
-    const R=3;
     for(let dx=-R;dx<=R;dx++)for(let dz=-R;dz<=R;dz++)
       if(dx*dx+dz*dz<=R*R+1)sb(m,wx+dx,ty+h,wz+dz,cap);
   }else if(variant===2){                            // SIDEWAYS
-    const len=3+((colRnd(wx,wz,523)*3)|0);
+    const len=3+((colRnd(wx,wz,523)*4)|0);          // longer: 3..6
     const d=(colRnd(wx,wz,525)*4)|0;
     const dx=[1,-1,0,0][d],dz=[0,0,1,-1][d];
     sb(m,wx,ty,wz,stem);sb(m,wx,ty+1,wz,stem);
     for(let i=0;i<=len;i++)sb(m,wx+dx*i,ty+2,wz+dz*i,stem);
     const ex=wx+dx*len,ez=wz+dz*len;
-    for(let ddx=-1;ddx<=1;ddx++)for(let ddz=-1;ddz<=1;ddz++){
+    const cR=1+((colRnd(wx,wz,524)*2)|0);           // cap radius 1..2
+    for(let ddx=-cR;ddx<=cR;ddx++)for(let ddz=-cR;ddz<=cR;ddz++){
       sb(m,ex+ddx,ty+2,ez+ddz,cap);sb(m,ex+ddx,ty+3,ez+ddz,cap);
     }
   }else if(variant===3){                            // DIAGONAL
-    const steps=4+((colRnd(wx,wz,527)*3)|0);
+    const steps=4+((colRnd(wx,wz,527)*4)|0);        // longer: 4..7
     const dx=colRnd(wx,wz,529)<0.5?1:-1,dz=colRnd(wx,wz,531)<0.5?1:-1;
+    const sw=colRnd(wx,wz,530)<0.4?1:0;             // occasionally thick stem
     let cxp=wx,czp=wz;
-    for(let i=0;i<steps;i++){sb(m,cxp,ty+i,czp,stem);cxp+=dx;czp+=dz;}
-    for(let ddx=-2;ddx<=2;ddx++)for(let ddz=-2;ddz<=2;ddz++)
-      if(!(Math.abs(ddx)===2&&Math.abs(ddz)===2))sb(m,cxp+ddx,ty+steps,czp+ddz,cap);
-  }else{                                            // UPRIGHT TALL
-    const h=6+((colRnd(wx,wz,533)*5)|0);            // 6..10 tall
-    for(let y=0;y<h;y++)sb(m,wx,ty+y,wz,stem);
-    for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
-      if(Math.abs(dx)===2&&Math.abs(dz)===2)continue;
-      sb(m,wx+dx,ty+h,wz+dz,cap);sb(m,wx+dx,ty+h+1,wz+dz,cap);
+    for(let i=0;i<steps;i++){
+      for(let sx=-sw;sx<=sw;sx++)for(let sz=-sw;sz<=sw;sz++)sb(m,cxp+sx,ty+i,czp+sz,stem);
+      cxp+=dx;czp+=dz;
     }
-    sb(m,wx,ty+h+2,wz,cap);
+    const dR=2+((colRnd(wx,wz,532)*2)|0);
+    for(let ddx=-dR;ddx<=dR;ddx++)for(let ddz=-dR;ddz<=dR;ddz++)
+      if(ddx*ddx+ddz*ddz<=dR*dR+1)sb(m,cxp+ddx,ty+steps,czp+ddz,cap);
+  }else{                                            // UPRIGHT TALL
+    const h=4+((colRnd(wx,wz,533)*8)|0);            // 4..11 tall
+    const R=1+((colRnd(wx,wz,534)*3)|0);            // 1..3 cap radius
+    const sw=h>7&&R>1?1:0;                          // thick stem for large mushrooms
+    for(let y=0;y<h;y++){
+      for(let sx=-sw;sx<=sw;sx++)for(let sz=-sw;sz<=sw;sz++)sb(m,wx+sx,ty+y,wz+sz,stem);
+    }
+    for(let dx=-R;dx<=R;dx++)for(let dz=-R;dz<=R;dz++){
+      if(Math.abs(dx)===R&&Math.abs(dz)===R)continue;
+      sb(m,wx+dx,ty+h,wz+dz,cap);
+      if(R>1)sb(m,wx+dx,ty+h+1,wz+dz,cap);
+    }
+    if(R>1)sb(m,wx,ty+h+2,wz,cap);
   }
 }
 // Deferred cave-decoration pass: builds lush-cave features and big mushrooms on
@@ -2199,21 +2222,58 @@ function* caveDecorate(m,cx,cz,surfs,bms){
     const ox=2+((colRnd(cx,cz,540+i)*12)|0);
     const oz=2+((colRnd(cz,cx,560+i)*12)|0);
     const x=x0+ox,z=z0+oz;
-    const yTop=Math.min(yTopBase,(surfs[ox*16+oz]||yTopBase)-6);
+    const surfHere=surfs[ox*16+oz]||yTopBase+6;
+    const yTop=Math.min(yTopBase,surfHere-6);
     if(yTop>yBot){
       const fy=findCaveFloor(x,z,yTop,yBot);
       if(fy!=null&&fy>WMIN+4&&caveAt(x,fy+1,z)&&caveAt(x,fy+2,z)){
         const cb=p3(x*0.006+25000,fy*0.006,z*0.006);
-        if(cb<-0.50){                                   // LUSH cave (was amethyst)
+        if(cb<-0.50){                                   // LUSH cave
           decorateLushSpot(m,x,fy,z);
           anyLush=true;
+          // Azalea tree on the surface directly above the lush spot
+          if(surfHere>=SEA&&surfHere>fy+8&&K.azalea)
+            placeAzaleaTree(m,x,surfHere+1,z);
         }else if(cb>0.45){                              // MUSHROOM cave
           paintCaveShell(m,x,fy,z,K.mycelium,2);
           bigMushroom(m,x,fy+1,z,(colRnd(x,z,573)*4)|0,colRnd(x,z,575)>0.4);
+          // ceiling mushroom cap blocks and hanging mushrooms
+          let ceil=null;
+          for(let ch=2;ch<=16;ch++){if(!caveAt(x,fy+ch,z)){ceil=fy+ch-1;break;}}
+          if(ceil!=null){
+            for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+              if(!caveAt(x+dx,ceil,z+dz)||caveAt(x+dx,ceil+1,z+dz))continue; // need cave air at ceil, solid above
+              const cr=colRnd(x+dx,z+dz,576);
+              if(cr<0.20)sb(m,x+dx,ceil,z+dz,cr<0.10?K.brn_mush_blk:K.red_mush_blk);
+              else if(cr<0.35&&K.brn_mush)sb(m,x+dx,ceil,z+dz,colRnd(x+dx,z+dz,577)>0.5?K.brn_mush:K.red_mush);
+            }
+          }
         }
       }
     }
     yield;
+  }
+  // DRIPSTONE PASS: stalactites from ceiling and stalagmites from floor in dripstone zones.
+  if(K.pointed_drip){
+    for(let i=0;i<4;i++){
+      const ox2=1+((colRnd(cx,cz,700+i)*14)|0);
+      const oz2=1+((colRnd(cz,cx,720+i)*14)|0);
+      const dx=x0+ox2,dz=z0+oz2;
+      if(p3(dx*0.03+5500,0,dz*0.03)<=0.50)continue;
+      const ys=surfs[ox2*16+oz2]||yTopBase+6;
+      const yT=Math.min(ys-2,50),yB=Math.max(WMIN+4,-100);
+      const fl=findCaveFloor(dx,dz,yT,yB);
+      if(fl==null||!caveAt(dx,fl+1,dz))continue;
+      const sH=1+((colRnd(dx,dz,740)*5)|0);
+      for(let s=0;s<sH&&caveAt(dx,fl+s+1,dz);s++)sb(m,dx,fl+s+1,dz,K.pointed_drip);
+      let ceil2=null;
+      for(let h=2;h<=20;h++){if(!caveAt(dx,fl+h,dz)){ceil2=fl+h-1;break;}}
+      if(ceil2!=null){
+        const tH=1+((colRnd(dx,dz,745)*4)|0);
+        for(let s=0;s<tH&&caveAt(dx,ceil2-s,dz);s++)sb(m,dx,ceil2-s,dz,K.pointed_drip);
+      }
+      yield;
+    }
   }
   // Axolotls: spawn into any cave water near a lush spot we just decorated.
   if(anyLush){
@@ -2368,6 +2428,11 @@ const villageMats=bm=>{
   if(bm===9||bm===10)return {wall:K.spr_plank||K.planks,roof:K.spruce_log,trim:K.cobble};
   if(bm===6)return {wall:K.jun_plank||K.planks,roof:K.jungle_log,trim:K.cobble};
   if(bm===13)return {wall:K.dk_plank||K.planks,roof:K.dark_oak_log,trim:K.cobble};
+  if(bm===5)return {wall:K.birch_plank||K.planks,roof:K.birch_log,trim:K.cobble};
+  if(bm===14)return {wall:K.chr_plank||K.planks,roof:K.cherry_log||K.oak_log,trim:K.cobble};
+  if(bm===15)return {wall:K.plo_plank||K.planks,roof:K.pale_oak_log||K.oak_log,trim:K.cobble};
+  if(bm===18)return {wall:K.terracotta||K.stone,roof:K.red_terracotta||K.terracotta||K.stone,trim:K.stone};
+  if(bm===8)return {wall:K.planks,roof:K.dark_oak_log||K.oak_log,trim:K.mud||K.cobble};
   return {wall:K.planks,roof:K.oak_log,trim:K.cobble};
 };
 function getVillageCenter(cx,cz){
@@ -2716,8 +2781,8 @@ function pickNext(m){
   // 2/3) Terrain expansion toward the nearest player.
   let bestAdj=null,bestAdjD=Infinity;   // unbuilt + cardinally adjacent to a built chunk
   let home=null,homeD=Infinity;         // a player's own chunk (fresh-start seed)
-  for(const c of pcs){
-    const pcx=c[0],pcz=c[1];
+  for(let pi=0;pi<_pcs.length;pi+=2){
+    const pcx=_pcs[pi],pcz=_pcs[pi+1];
     for(let dx=-RADIUS;dx<=RADIUS;dx++)for(let dz=-RADIUS;dz<=RADIUS;dz++){
       const cx=pcx+dx,cz=pcz+dz,k=ck(cx,cz);
       if(FULL.has(k)||TERRAIN.has(k)||isDone(k))continue;   // already built
